@@ -717,7 +717,7 @@ function StepTry({
     setOpening(true);
     try {
       const row = await fKiosk({ data: { classId, duration: "2h" } });
-      window.open(`/kiosk/${row.session_token}`, "_blank");
+      window.open(`/kiosk/${row.token}`, "_blank");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
     } finally {
