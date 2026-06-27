@@ -7,10 +7,12 @@ import { CheckCircle2, XCircle, Camera } from "lucide-react";
 import { Logo } from "@/components/landing/Logo";
 
 export const Route = createFileRoute("/kiosk/$token")({
+  ssr: false,
   component: KioskPage,
 });
 
 type BoardData = Awaited<ReturnType<typeof getKioskBoard>>;
+type Flash = { name: string; ok: boolean; msg?: string } | null;
 
 function KioskPage() {
   const { token } = Route.useParams();
@@ -18,11 +20,13 @@ function KioskPage() {
   const fScan = useServerFn(recordKioskScan);
   const [board, setBoard] = useState<BoardData | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [recent, setRecent] = useState<Array<{ name: string; ok: boolean; msg?: string; at: number }>>(
-    [],
-  );
+  const [recent, setRecent] = useState<
+    Array<{ name: string; ok: boolean; msg?: string; at: number }>
+  >([]);
+  const [flash, setFlash] = useState<Flash>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastScanRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function refresh() {
     fBoard({ data: { token } }).then(setBoard);
@@ -33,6 +37,12 @@ function KioskPage() {
     return () => clearInterval(i);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  function showFlash(f: Flash) {
+    setFlash(f);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 1400);
+  }
 
   async function startCamera() {
     if (scannerRef.current) return;
@@ -51,27 +61,22 @@ function KioskPage() {
           try {
             const result = await fScan({ data: { sessionToken: token, qrToken: decoded } });
             if (result.ok) {
+              const msg = result.already ? "Already marked" : "Marked present";
+              showFlash({ name: result.studentName, ok: true, msg });
               setRecent((r) =>
-                [
-                  {
-                    name: result.studentName,
-                    ok: true,
-                    msg: result.already ? "Already marked" : "Marked present",
-                    at: now,
-                  },
-                  ...r,
-                ].slice(0, 6),
+                [{ name: result.studentName, ok: true, msg, at: now }, ...r].slice(0, 6),
               );
               refresh();
             } else {
+              showFlash({ name: "Scan failed", ok: false, msg: result.error });
               setRecent((r) =>
                 [{ name: "Scan failed", ok: false, msg: result.error, at: now }, ...r].slice(0, 6),
               );
             }
           } catch (e) {
-            setRecent((r) =>
-              [{ name: "Error", ok: false, msg: e instanceof Error ? e.message : "Failed", at: now }, ...r].slice(0, 6),
-            );
+            const msg = e instanceof Error ? e.message : "Failed";
+            showFlash({ name: "Error", ok: false, msg });
+            setRecent((r) => [{ name: "Error", ok: false, msg, at: now }, ...r].slice(0, 6));
           }
         },
         () => {},
@@ -90,11 +95,16 @@ function KioskPage() {
         s.stop().catch(() => {}).finally(() => s.clear());
         scannerRef.current = null;
       }
+      if (flashTimer.current) clearTimeout(flashTimer.current);
     };
   }, []);
 
   if (!board) {
-    return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Loading…
+      </div>
+    );
   }
   if ("error" in board && board.error) {
     return (
@@ -115,23 +125,37 @@ function KioskPage() {
     );
   }
 
-  const present = board.todayEvents?.filter((e) => e.status === "present" || e.status === "late").length ?? 0;
+  const present =
+    board.todayEvents?.filter((e) => e.status === "present" || e.status === "late").length ?? 0;
   const total = board.students?.length ?? 0;
+  const insecure =
+    typeof window !== "undefined" &&
+    window.location.protocol === "http:" &&
+    window.location.hostname !== "localhost";
 
   return (
     <div className="min-h-screen bg-[#0f0e0c] text-white">
       <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-        <Logo />
-        <div className="text-sm">
-          <span className="font-semibold">{board.cls?.name}</span>
-          <span className="text-white/60 ml-3">
-            {present}/{total} present
-          </span>
+        <div className="flex items-center gap-3">
+          {board.settings?.logo_url ? (
+            <img src={board.settings.logo_url} alt="" className="h-8 w-8 object-contain rounded" />
+          ) : (
+            <Logo />
+          )}
+          <div className="text-sm">
+            {board.settings?.school_name && (
+              <div className="text-xs text-white/60">{board.settings.school_name}</div>
+            )}
+            <div className="font-semibold">{board.cls?.name}</div>
+          </div>
+        </div>
+        <div className="text-sm text-white/70">
+          {present}/{total} present
         </div>
       </header>
 
       <div className="grid md:grid-cols-[1fr_320px] min-h-[calc(100vh-64px)]">
-        <div className="p-6 flex flex-col items-center justify-center">
+        <div className="p-6 flex flex-col items-center justify-center relative">
           <div
             id="qr-reader"
             className="w-full max-w-[420px] aspect-square rounded-xl overflow-hidden bg-black/40 border border-white/10"
@@ -144,17 +168,42 @@ function KioskPage() {
               <Camera className="h-5 w-5" /> Start camera
             </button>
           )}
+          {insecure && (
+            <p className="mt-3 text-xs text-amber-300 max-w-sm text-center">
+              Camera access requires HTTPS. Open this kiosk URL over https:// or on localhost.
+            </p>
+          )}
           <p className="mt-4 text-sm text-white/60 text-center max-w-sm">
             Hold a student's QR code in front of the camera. Each student is marked once per day.
           </p>
+
+          {flash && (
+            <div
+              className={`pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in`}
+            >
+              <div
+                className={`rounded-2xl px-10 py-8 text-center ${
+                  flash.ok ? "bg-emerald-500" : "bg-rose-500"
+                }`}
+              >
+                {flash.ok ? (
+                  <CheckCircle2 className="h-16 w-16 mx-auto" />
+                ) : (
+                  <XCircle className="h-16 w-16 mx-auto" />
+                )}
+                <div className="mt-3 text-3xl font-bold">{flash.name}</div>
+                {flash.msg && <div className="mt-1 text-white/90">{flash.msg}</div>}
+              </div>
+            </div>
+          )}
         </div>
 
         <aside className="border-l border-white/10 p-5 bg-black/30">
-          <h2 className="font-semibold mb-3 text-sm uppercase tracking-wide text-white/60">Recent scans</h2>
+          <h2 className="font-semibold mb-3 text-sm uppercase tracking-wide text-white/60">
+            Recent scans
+          </h2>
           <ul className="space-y-2">
-            {recent.length === 0 && (
-              <li className="text-sm text-white/40">No scans yet.</li>
-            )}
+            {recent.length === 0 && <li className="text-sm text-white/40">No scans yet.</li>}
             {recent.map((r, i) => (
               <li
                 key={i}

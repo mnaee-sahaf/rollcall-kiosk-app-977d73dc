@@ -23,6 +23,7 @@ import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authenticated/app.reports'
 import { Route as AuthenticatedAppImportRouteImport } from './routes/_authenticated/app.import'
 import { Route as AuthenticatedAppClassesRouteImport } from './routes/_authenticated/app.classes'
+import { Route as AuthenticatedAppInviteTokenRouteImport } from './routes/_authenticated/app.invite.$token'
 import { Route as AuthenticatedAppClassesClassIdRouteImport } from './routes/_authenticated/app.classes.$classId'
 import { Route as AuthenticatedAppClassesClassIdQrRouteImport } from './routes/_authenticated/app.classes.$classId.qr'
 
@@ -98,6 +99,12 @@ const AuthenticatedAppClassesRoute = AuthenticatedAppClassesRouteImport.update({
   path: '/classes',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppInviteTokenRoute =
+  AuthenticatedAppInviteTokenRouteImport.update({
+    id: '/invite/$token',
+    path: '/invite/$token',
+    getParentRoute: () => AuthenticatedAppRoute,
+  } as any)
 const AuthenticatedAppClassesClassIdRoute =
   AuthenticatedAppClassesClassIdRouteImport.update({
     id: '/$classId',
@@ -126,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/app/teachers': typeof AuthenticatedAppTeachersRoute
   '/app/': typeof AuthenticatedAppIndexRoute
   '/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
+  '/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
   '/app/classes/$classId/qr': typeof AuthenticatedAppClassesClassIdQrRoute
 }
 export interface FileRoutesByTo {
@@ -142,6 +150,7 @@ export interface FileRoutesByTo {
   '/app/teachers': typeof AuthenticatedAppTeachersRoute
   '/app': typeof AuthenticatedAppIndexRoute
   '/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
+  '/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
   '/app/classes/$classId/qr': typeof AuthenticatedAppClassesClassIdQrRoute
 }
 export interface FileRoutesById {
@@ -161,6 +170,7 @@ export interface FileRoutesById {
   '/_authenticated/app/teachers': typeof AuthenticatedAppTeachersRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
   '/_authenticated/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
+  '/_authenticated/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
   '/_authenticated/app/classes/$classId/qr': typeof AuthenticatedAppClassesClassIdQrRoute
 }
 export interface FileRouteTypes {
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/app/teachers'
     | '/app/'
     | '/app/classes/$classId'
+    | '/app/invite/$token'
     | '/app/classes/$classId/qr'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -196,6 +207,7 @@ export interface FileRouteTypes {
     | '/app/teachers'
     | '/app'
     | '/app/classes/$classId'
+    | '/app/invite/$token'
     | '/app/classes/$classId/qr'
   id:
     | '__root__'
@@ -214,6 +226,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/teachers'
     | '/_authenticated/app/'
     | '/_authenticated/app/classes/$classId'
+    | '/_authenticated/app/invite/$token'
     | '/_authenticated/app/classes/$classId/qr'
   fileRoutesById: FileRoutesById
 }
@@ -326,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppClassesRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/invite/$token': {
+      id: '/_authenticated/app/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/app/invite/$token'
+      preLoaderRoute: typeof AuthenticatedAppInviteTokenRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/classes/$classId': {
       id: '/_authenticated/app/classes/$classId'
       path: '/$classId'
@@ -381,6 +401,7 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppStudentsRoute: typeof AuthenticatedAppStudentsRoute
   AuthenticatedAppTeachersRoute: typeof AuthenticatedAppTeachersRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
+  AuthenticatedAppInviteTokenRoute: typeof AuthenticatedAppInviteTokenRoute
 }
 
 const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
@@ -391,6 +412,7 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppStudentsRoute: AuthenticatedAppStudentsRoute,
   AuthenticatedAppTeachersRoute: AuthenticatedAppTeachersRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
+  AuthenticatedAppInviteTokenRoute: AuthenticatedAppInviteTokenRoute,
 }
 
 const AuthenticatedAppRouteWithChildren =
@@ -418,13 +440,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

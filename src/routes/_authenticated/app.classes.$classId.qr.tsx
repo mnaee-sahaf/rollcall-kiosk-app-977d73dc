@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app/classes/$classId/qr")({
+  ssr: false,
   component: QrSheetPage,
 });
 
@@ -18,13 +19,16 @@ function QrSheetPage() {
   const [cls, setCls] = useState<{ name: string; grade: string | null } | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
-  const [cards, setCards] = useState<Array<{ id: string; name: string; ext: string | null; qrSvg: string }>>([]);
+  const [cards, setCards] = useState<
+    Array<{ id: string; name: string; ext: string | null; qrSvg: string; lookupSvg: string }>
+  >([]);
 
   useEffect(() => {
     fSettings({}).then((s) => {
       setLogoUrl(s?.logo_url ?? null);
       setSchoolName(s?.school_name ?? null);
     });
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
     fGetClass({ data: { classId } }).then(async ({ cls, students }) => {
       setCls(cls);
       const results = await Promise.all(
@@ -33,6 +37,11 @@ function QrSheetPage() {
           name: s.full_name,
           ext: s.external_id,
           qrSvg: await QRCode.toString(s.qr_token, { type: "svg", margin: 0, width: 180 }),
+          lookupSvg: await QRCode.toString(`${origin}/lookup/${s.qr_token}`, {
+            type: "svg",
+            margin: 0,
+            width: 90,
+          }),
         })),
       );
       setCards(results);
@@ -42,7 +51,11 @@ function QrSheetPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="p-6 print:hidden border-b flex items-center justify-between">
-        <Link to="/app/classes/$classId" params={{ classId }} className="text-sm text-muted-foreground inline-flex items-center gap-1">
+        <Link
+          to="/app/classes/$classId"
+          params={{ classId }}
+          className="text-sm text-muted-foreground inline-flex items-center gap-1"
+        >
           <ArrowLeft className="h-3 w-3" /> Back to class
         </Link>
         <Button onClick={() => window.print()}>
@@ -58,7 +71,7 @@ function QrSheetPage() {
           </div>
         </div>
         <p className="text-sm text-muted-foreground mb-6 print:hidden">
-          Attendance QR cards — one per student. Cut along the dashed lines.
+          Big QR = kiosk scan. Small QR = parent self-lookup. Cut along the dashed lines.
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {cards.map((c) => (
@@ -67,11 +80,27 @@ function QrSheetPage() {
               className="rounded-lg border border-dashed p-3 flex flex-col items-center text-center break-inside-avoid"
             >
               {logoUrl && <img src={logoUrl} alt="" className="h-6 mb-1 object-contain" />}
-              <div className="text-[10px] uppercase text-muted-foreground mb-1">{schoolName ?? "RollCall"}</div>
-              <div dangerouslySetInnerHTML={{ __html: c.qrSvg }} className="[&_svg]:w-full [&_svg]:max-w-[140px]" />
+              <div className="text-[10px] uppercase text-muted-foreground mb-1">
+                {schoolName ?? "RollCall"}
+              </div>
+              <div
+                dangerouslySetInnerHTML={{ __html: c.qrSvg }}
+                className="[&_svg]:w-full [&_svg]:max-w-[140px]"
+              />
               <div className="mt-2 font-semibold text-sm leading-tight">{c.name}</div>
               {c.ext && <div className="text-[10px] text-muted-foreground">ID {c.ext}</div>}
               <div className="text-[10px] text-muted-foreground mt-0.5">{cls?.name}</div>
+              <div className="mt-2 pt-2 border-t border-dashed w-full flex items-center justify-center gap-2">
+                <div
+                  dangerouslySetInnerHTML={{ __html: c.lookupSvg }}
+                  className="[&_svg]:w-12 [&_svg]:h-12"
+                />
+                <div className="text-[8px] text-muted-foreground text-left leading-tight">
+                  Parent
+                  <br />
+                  lookup
+                </div>
+              </div>
             </div>
           ))}
         </div>

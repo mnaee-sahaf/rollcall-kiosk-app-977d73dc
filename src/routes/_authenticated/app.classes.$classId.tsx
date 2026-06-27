@@ -15,16 +15,19 @@ import {
   bulkMarkAllPresent,
   getStudentHistory,
   exportClassAttendance,
+  setStudentNote,
 } from "@/lib/attendance.functions";
 import {
   createKioskSession,
   listKioskSessions,
   revokeKioskSession,
 } from "@/lib/kiosk.functions";
+import { getMyContext, listTeachers } from "@/lib/auth.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
 
 import {
   Sheet,
@@ -73,7 +76,12 @@ function ClassDetailPage() {
   const fCreateSession = useServerFn(createKioskSession);
   const fListSessions = useServerFn(listKioskSessions);
   const fRevoke = useServerFn(revokeKioskSession);
+  const fSetNote = useServerFn(setStudentNote);
+  const fCtx = useServerFn(getMyContext);
+  const fTeachers = useServerFn(listTeachers);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [teachers, setTeachers] = useState<Array<{ user_id: string; full_name: string | null }>>([]);
   const [cls, setCls] = useState<ClassRow | null>(null);
   const [roster, setRoster] = useState<Roster>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -88,12 +96,21 @@ function ClassDetailPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editGrade, setEditGrade] = useState("");
+  const [editTeacher, setEditTeacher] = useState("");
   const [exportFrom, setExportFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
     return d.toISOString().slice(0, 10);
   });
   const [exportTo, setExportTo] = useState(new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    fCtx({}).then((c) => {
+      setIsAdmin(c.isAdmin);
+      if (c.isAdmin) fTeachers({}).then(setTeachers).catch(() => {});
+    });
+  }, [fCtx, fTeachers]);
+
 
   const refresh = useCallback(async () => {
     const [c, r, s] = await Promise.all([
@@ -106,6 +123,8 @@ function ClassDetailPage() {
     setSessions(s);
     setEditName(c.cls.name);
     setEditGrade(c.cls.grade ?? "");
+    setEditTeacher(c.cls.teacher_id);
+
   }, [classId, day, fGetClass, fRoster, fListSessions]);
 
   useEffect(() => {
@@ -202,7 +221,12 @@ function ClassDetailPage() {
   async function handleSaveSettings() {
     try {
       await fUpdateClass({
-        data: { classId, name: editName, grade: editGrade || null },
+        data: {
+          classId,
+          name: editName,
+          grade: editGrade || null,
+          teacherId: isAdmin && editTeacher ? editTeacher : undefined,
+        },
       });
       toast.success("Class updated");
       setSettingsOpen(false);
@@ -211,6 +235,7 @@ function ClassDetailPage() {
       toast.error(err instanceof Error ? err.message : "Failed");
     }
   }
+
 
   const activeSession = sessions.find(
     (s) => !s.revoked_at && new Date(s.expires_at).getTime() > Date.now(),
@@ -416,13 +441,26 @@ function ClassDetailPage() {
                         size="sm"
                         className="h-7"
                         onClick={async () => {
-                          await handleMark(s.id, s.status ?? "present", noteText || null);
-                          setNoteOpenFor(null);
-                          setNoteText("");
+                          try {
+                            await fSetNote({
+                              data: {
+                                studentId: s.id,
+                                classId,
+                                day,
+                                note: noteText || null,
+                              },
+                            });
+                            setNoteOpenFor(null);
+                            setNoteText("");
+                            refresh();
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Failed");
+                          }
                         }}
                       >
                         Save
                       </Button>
+
                     </div>
                   ) : (
                     <button
@@ -545,7 +583,25 @@ function ClassDetailPage() {
               <Label>Grade</Label>
               <Input value={editGrade} onChange={(e) => setEditGrade(e.target.value)} />
             </div>
+            {isAdmin && (
+              <div>
+                <Label>Teacher</Label>
+                <select
+                  value={editTeacher}
+                  onChange={(e) => setEditTeacher(e.target.value)}
+                  className="h-9 w-full rounded-md border px-2 text-sm"
+                >
+                  {teachers.length === 0 && <option value={editTeacher}>Current teacher</option>}
+                  {teachers.map((t) => (
+                    <option key={t.user_id} value={t.user_id}>
+                      {t.full_name ?? t.user_id.slice(0, 8)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <Button onClick={handleSaveSettings}>Save</Button>
+
             <div className="pt-6 border-t">
               <Button
                 variant="ghost"

@@ -70,7 +70,7 @@ export const getKioskBoard = createServerFn({ method: "GET" })
     if (new Date(session.expires_at).getTime() < Date.now()) return { error: "expired" as const };
 
     const today = new Date().toISOString().slice(0, 10);
-    const [{ data: cls }, { data: students }, { data: events }] = await Promise.all([
+    const [{ data: cls }, { data: students }, { data: events }, { data: settings }] = await Promise.all([
       supabaseAdmin.from("classes").select("id, name, grade").eq("id", session.class_id).single(),
       supabaseAdmin
         .from("students")
@@ -82,6 +82,11 @@ export const getKioskBoard = createServerFn({ method: "GET" })
         .select("student_id, status, occurred_at")
         .eq("class_id", session.class_id)
         .eq("day", today),
+      supabaseAdmin
+        .from("school_settings")
+        .select("school_name, logo_url")
+        .eq("singleton", true)
+        .maybeSingle(),
     ]);
 
     return {
@@ -89,8 +94,10 @@ export const getKioskBoard = createServerFn({ method: "GET" })
       cls,
       students: students ?? [],
       todayEvents: events ?? [],
+      settings: settings ?? null,
     };
   });
+
 
 export const recordKioskScan = createServerFn({ method: "POST" })
   .inputValidator((d) =>

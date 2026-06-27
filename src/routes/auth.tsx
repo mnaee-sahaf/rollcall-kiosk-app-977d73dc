@@ -9,12 +9,14 @@ import { toast } from "sonner";
 import { Logo } from "@/components/landing/Logo";
 
 export const Route = createFileRoute("/auth")({
+  ssr: false,
   validateSearch: (s: Record<string, unknown>) => ({
     invite: typeof s.invite === "string" ? s.invite : undefined,
     mode: s.mode === "signup" ? "signup" : "signin",
   }),
   component: AuthPage,
 });
+
 
 function AuthPage() {
   const navigate = useNavigate();
