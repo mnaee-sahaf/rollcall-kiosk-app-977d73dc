@@ -150,6 +150,36 @@ export const addStudent = createServerFn({ method: "POST" })
     return row;
   });
 
+export const bulkAddStudents = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        classId: z.string().uuid(),
+        students: z
+          .array(
+            z.object({
+              full_name: z.string().min(1).max(120),
+              external_id: z.string().max(60).optional().nullable(),
+            }),
+          )
+          .min(1)
+          .max(500),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const rows = data.students.map((s) => ({
+      class_id: data.classId,
+      full_name: s.full_name,
+      external_id: s.external_id ?? null,
+    }));
+    const { data: inserted, error } = await supabase.from("students").insert(rows).select("id");
+    if (error) throw new Error(error.message);
+    return { inserted: inserted?.length ?? 0 };
+  });
+
 export const updateStudent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>

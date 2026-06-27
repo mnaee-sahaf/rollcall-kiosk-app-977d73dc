@@ -6,19 +6,52 @@ export const getMyContext = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const [rolesRes, profileRes] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-    ]);
+    const [rolesRes, profileRes, settingsRes, classCountRes, studentCountRes, teacherCountRes] =
+      await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", userId),
+        supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        supabase.from("school_settings").select("school_name, onboarded_at").eq("singleton", true).maybeSingle(),
+        supabase.from("classes").select("id", { count: "exact", head: true }),
+        supabase.from("students").select("id", { count: "exact", head: true }),
+        supabase.from("user_roles").select("user_id", { count: "exact", head: true }).eq("role", "teacher"),
+      ]);
     const roles = (rolesRes.data ?? []).map((r: { role: string }) => r.role);
+    const isAdmin = roles.includes("admin");
+    const setupProgress = {
+      hasSchoolName: !!settingsRes.data?.school_name,
+      hasTeachers: (teacherCountRes.count ?? 0) > 0,
+      hasClasses: (classCountRes.count ?? 0) > 0,
+      hasStudents: (studentCountRes.count ?? 0) > 0,
+      onboardedAt: settingsRes.data?.onboarded_at ?? null,
+    };
     return {
       userId,
       email: context.claims.email as string | undefined,
       roles,
-      isAdmin: roles.includes("admin"),
+      isAdmin,
       isTeacher: roles.includes("teacher"),
       profile: profileRes.data,
+      setupProgress,
+      needsOnboarding: isAdmin && !setupProgress.onboardedAt,
     };
+  });
+
+export const completeOnboarding = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: adminRows } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin");
+    if (!adminRows || adminRows.length === 0) throw new Error("Forbidden: admin only");
+    const { error } = await supabase
+      .from("school_settings")
+      .update({ onboarded_at: new Date().toISOString(), updated_by: userId })
+      .eq("singleton", true);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const inviteTeacher = createServerFn({ method: "POST" })
