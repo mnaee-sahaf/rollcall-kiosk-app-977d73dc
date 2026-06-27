@@ -17,6 +17,9 @@ export function Nav() {
         </nav>
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" size="sm">
+            <Link to="/auth">Sign in</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
             <Link to="/demo">Try the demo</Link>
           </Button>
           <Button asChild size="sm">
