@@ -221,7 +221,12 @@ function ClassDetailPage() {
   async function handleSaveSettings() {
     try {
       await fUpdateClass({
-        data: { classId, name: editName, grade: editGrade || null },
+        data: {
+          classId,
+          name: editName,
+          grade: editGrade || null,
+          teacherId: isAdmin && editTeacher ? editTeacher : undefined,
+        },
       });
       toast.success("Class updated");
       setSettingsOpen(false);
@@ -230,6 +235,7 @@ function ClassDetailPage() {
       toast.error(err instanceof Error ? err.message : "Failed");
     }
   }
+
 
   const activeSession = sessions.find(
     (s) => !s.revoked_at && new Date(s.expires_at).getTime() > Date.now(),
@@ -435,13 +441,26 @@ function ClassDetailPage() {
                         size="sm"
                         className="h-7"
                         onClick={async () => {
-                          await handleMark(s.id, s.status ?? "present", noteText || null);
-                          setNoteOpenFor(null);
-                          setNoteText("");
+                          try {
+                            await fSetNote({
+                              data: {
+                                studentId: s.id,
+                                classId,
+                                day,
+                                note: noteText || null,
+                              },
+                            });
+                            setNoteOpenFor(null);
+                            setNoteText("");
+                            refresh();
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Failed");
+                          }
                         }}
                       >
                         Save
                       </Button>
+
                     </div>
                   ) : (
                     <button
