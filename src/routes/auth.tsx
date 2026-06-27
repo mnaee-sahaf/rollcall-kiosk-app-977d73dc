@@ -101,6 +101,20 @@ function AuthPage() {
             You're joining as a teacher.
           </p>
         )}
+        {currentEmail && (
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            You're already signed in as <span className="font-medium">{currentEmail}</span>.{" "}
+            <button type="button" className="underline" onClick={handleSignOut}>
+              Sign out
+            </button>{" "}
+            to use a different account, or{" "}
+            <button type="button" className="underline" onClick={() => navigate({ to: "/app" })}>
+              go to your dashboard
+            </button>
+            .
+          </div>
+        )}
+
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {mode === "signup" && (
