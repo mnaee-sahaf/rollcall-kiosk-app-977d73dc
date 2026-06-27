@@ -1,113 +1,75 @@
+## Full Admin / Teacher / Student Experience
 
-# RollCall MVP Plan
+Build out the remaining MVP surfaces on top of the existing schema. Students stay login-free (printed QR cards only); class-QR-scanned-by-students is deferred to V2.
 
-Build the real app behind the landing page: admin/teacher dashboards, student & class management, printable QR codes, a web-based kiosk scanner, and attendance reports with filters.
+---
 
-## Stack
+### 1. Schema additions (one migration)
 
-- Lovable Cloud (Postgres + Auth + Storage) for persistence
-- TanStack Start (current setup) for routes, server functions, and SSR
-- Email/password + Google sign-in via Lovable Cloud
-- `qrcode` (generate) + `html5-qrcode` (camera scan) on the client
-- Existing shadcn UI + orange brand tokens
+- `attendance_events`: add `note text null` (reason for absent/late).
+- `school_settings` (singleton row): `school_name`, `logo_url`, `day_cutoff_time` (e.g. 09:00 = late after), `absent_after_time` (e.g. 10:30 = absent if no scan), `timezone`.
+- `students`: add `external_id` uniqueness per class (already exists as column — add unique index).
+- Storage bucket `school-assets` (public) for logo uploads.
+- Grants + RLS: settings readable by any authenticated user, writable only by admin.
 
-## Roles & auth
+### 2. Admin experience
 
-- Auth methods: email/password + Google
-- Roles table: `app_role` enum (`admin`, `teacher`), `user_roles` table, `has_role()` security-definer function (per project rules — never store role on profile)
-- First signup at `/auth` creates an account with no role. Admin role is bootstrapped via a one-time invite token (env-stored) — first user who redeems becomes admin.
-- Admin invites teachers by email: creates a `teacher_invites` row with a signed token; teacher signs up via invite link and is granted `teacher` role on confirmation.
-- Profiles table for display name + school name.
+- **`/app/admin/settings`** — school name, logo upload, day cutoff & absent-after times, timezone. Logo appears on printable QR sheets and kiosk header.
+- **`/app/admin/classes`** — school-wide class list with teacher column, create/edit/delete/reassign teacher.
+- **`/app/admin/students`** — searchable, paginated all-students table with class filter; edit/move/deactivate.
+- **Bulk CSV import** (`/app/admin/import`):
+  - Teachers CSV (email, full_name) → creates `teacher_invites` rows in batch.
+  - Students CSV (class_name, full_name, external_id) → upserts students, auto-creates classes if missing; downloadable error report row-by-row.
+- **`/app/reports`** for admin gains: teacher filter, per-teacher comparison bar chart, chronic-absentee table (≥3 absences in range, configurable).
 
-## Data model (Lovable Cloud)
+### 3. Teacher experience (additions to existing pages)
 
-- `profiles(id pk → auth.users, full_name, school_name)`
-- `user_roles(user_id, role, unique(user_id, role))`
-- `teacher_invites(id, email, token_hash, invited_by, accepted_at, expires_at)`
-- `classes(id, name, grade, teacher_id → auth.users, created_at)` — one owner teacher per class in MVP
-- `students(id, class_id → classes, full_name, external_id, qr_token unique, active)` — `qr_token` is a random opaque ID encoded in QR
-- `kiosk_sessions(id, class_id, created_by, token_hash, starts_at, expires_at, revoked_at)` — backs signed kiosk links
-- `attendance_events(id, student_id, class_id, kiosk_session_id nullable, marked_by nullable, method enum['kiosk','manual'], status enum['present','absent','late'], occurred_at, unique(student_id, class_id, date(occurred_at)))`
+- **Class detail (`/app/classes/$classId`)** roster table:
+  - "Mark all present" button → bulk upsert today's events; then toggle individual exceptions.
+  - Per-row Present / Late / Absent buttons + "note" popover (saves `note`).
+  - Date picker to backfill/correct prior days.
+- **Student drawer** from roster row: attendance history (last 30 days strip + table), Re-issue QR, Export CSV/PDF for that student.
+- **Class export**: roster CSV and attendance CSV for selected date range from class detail.
+- Kiosk session card already exists — add "Copy link", "Show QR" (so a tablet can scan to open), and "Revoke" actions visible while active.
 
-RLS:
-- `profiles`: user sees own row; admin sees all
-- `classes`, `students`: teacher sees their classes/students; admin sees all
-- `attendance_events`: teacher sees rows for their classes; admin all; insert via server functions only
-- All tables get explicit `GRANT` to `authenticated` + `service_role` per project rules
+### 4. Student experience (no login)
 
-## Routes
+Since students don't sign in, their "experience" is the kiosk + printed card:
 
-Public:
-- `/` landing (existing)
-- `/demo` static demo (existing)
-- `/auth` sign in / sign up / accept invite (`?invite=…`)
-- `/kiosk/$token` web kiosk scanner page — validates signed session token, no login required
+- **Printable QR card sheet** (`/app/classes/$classId/qr`) — already scaffolded. Polish: school logo, class name, student name, external ID, QR, cut guides; A4 4×2 grid; "Print" button.
+- **Kiosk scan feedback** (`/kiosk/$token`) — big success state with student name, photo placeholder, time, "X / Y present" counter; clear error states for unknown QR, wrong class, already-marked-today, expired session.
+- **Public student lookup** (`/lookup/$qrToken`) — read-only page a parent/student can open by scanning their own card with a phone camera: shows student name, class, today's status, and last 14 days. Implemented as a server fn with a publishable-key read against narrow `TO anon` policy on a SQL view that exposes only the safe columns.
 
-Authenticated (`/_authenticated/*`, integration-managed gate):
-- `/app` redirect to admin or teacher home based on role
-- `/app/admin` admin dashboard: stats, teachers, classes, invite teacher button
-- `/app/admin/teachers` teacher list + invite form
-- `/app/admin/classes` all classes
-- `/app/classes` teacher: list of own classes
-- `/app/classes/$classId` class detail: roster, "Start kiosk session", "Print QR sheet", manual roster marking for today
-- `/app/classes/$classId/students/new` add student (generates `qr_token`)
-- `/app/classes/$classId/qr` printable QR sheet (one card per student, A4 grid)
-- `/app/classes/$classId/kiosk` create kiosk session (pick duration: 30m / 2h / 8h) → shows shareable link + QR to open it on a tablet
-- `/app/reports` reports with filters (class, teacher, date range, granularity daily/weekly/monthly)
+### 5. Reports & analytics
 
-## QR codes for students
+- Date-range presets (today, this week, this month, custom), granularity (daily/weekly/monthly).
+- Attendance rate line chart, per-class bar chart, chronic absentees table.
+- CSV export of the underlying filtered rows.
+- Admin sees school-wide + per-teacher slice; teacher sees only their classes.
 
-- Each student gets a random 24-char `qr_token` at creation
-- Printable sheet renders one card per student using `qrcode` → SVG: school name, student name, external ID, QR
-- Re-issue button rotates `qr_token` (invalidates old card)
+### 6. Technical notes
 
-## Web kiosk
+- New server fns in `src/lib/`: `settings.functions.ts`, `import.functions.ts` (CSV parsed client-side, rows sent in batches of 100), extend `attendance.functions.ts` with `bulkMarkPresent`, `markWithNote`, `getStudentHistory`, `studentLookupPublic` (no auth).
+- Use `papaparse` for CSV parse/stringify (client + server).
+- Use `jspdf` + `qrcode` for per-student PDF export; printable sheet stays HTML-print.
+- Storage upload via existing `supabase.storage` client; signed-in admin uploads to `school-assets/logo.<ext>` with overwrite.
+- All new tables/columns get explicit GRANTs; settings policy uses `has_role(auth.uid(),'admin')`; student lookup view has `GRANT SELECT TO anon` with policy filtering to active students only.
+- Sidebar: split into Admin section (Settings, Teachers, All classes, All students, Import) vs Teacher section (My classes, Reports). Both see Dashboard + Reports.
 
-- Teacher creates a kiosk session for a class with a duration; server returns `https://…/kiosk/{token}` and a QR of that URL for easy device handoff
-- `/kiosk/$token` page (public route):
-  - Server fn validates token (not expired, not revoked) and returns class + roster summary; otherwise shows expired screen
-  - Uses `html5-qrcode` camera scanner, full-screen mobile/desktop friendly UI
-  - On scan: server fn `recordKioskScan({ sessionToken, qrToken })` → looks up student, verifies student belongs to that class, inserts `attendance_event` (idempotent per student per day), returns success/fail toast with student name and big checkmark
-  - Shows running counter "X / Y present" and the last 5 scans
-  - "End session" requires the teacher to be signed in on another device (revoke from class page); kiosk page also auto-locks when expired
+### Build order
 
-## Manual roster
+1. Migration (settings table, note column, storage bucket, public lookup view + policy).
+2. School settings page + logo upload, wire into kiosk + QR sheet header.
+3. Teacher roster upgrades: bulk mark, notes, date picker, student drawer + history + per-student export.
+4. Admin all-classes / all-students management pages.
+5. CSV bulk import (teachers + students) with error report.
+6. Reports upgrades: teacher filter, per-teacher chart, chronic absentees, CSV export.
+7. Public `/lookup/$qrToken` page.
+8. Kiosk polish: success/error states, logo, counter, recent scans styling.
 
-- Class detail page lists today's roster with Present / Absent / Late toggles
-- Each toggle calls `markAttendance` server fn (upserts today's event)
+### Out of scope (V2)
 
-## Reports
-
-- `/app/reports` filters: class (multi), teacher (admin only), date range, granularity (daily/weekly/monthly)
-- Charts (recharts already installed): attendance rate over time, per-class comparison bar, chronic absentees table (≥3 absences in range)
-- Export CSV button (client-side from query result)
-
-## Server functions (key ones)
-
-All under `src/lib/*.functions.ts`, using `requireSupabaseAuth` + role check via `has_role`:
-- `inviteTeacher`, `acceptInvite`
-- `createClass`, `addStudent`, `rotateStudentQr`
-- `createKioskSession`, `revokeKioskSession`
-- `recordKioskScan` (public — validates session token instead of user auth; rate-limited by token)
-- `markAttendance` (teacher only)
-- `getAttendanceReport(filters)` (teacher → own classes only; admin → all)
-
-## Out of scope (MVP)
-
-- Companion student app (waitlist landing only)
-- Multi-teacher per class, co-teachers, substitutes
-- SMS/email parent notifications
-- Bulk CSV student import (can add quickly post-MVP if needed)
-- Billing / pricing
-
-## Build order
-
-1. Enable Lovable Cloud + auth (email + Google) + role tables and `has_role`
-2. Profiles, classes, students schema + RLS + grants
-3. Admin/teacher shells under `_authenticated`, role-based redirect
-4. Teacher invite flow
-5. Class + student CRUD, QR generation, printable sheet
-6. Kiosk session creation + `/kiosk/$token` scanner
-7. Manual roster marking
-8. Reports page with filters, charts, CSV export
-
+- Student login + companion app
+- Rotating class QR scanned from student phones
+- Parent notifications (SMS/email)
+- Multi-teacher per class

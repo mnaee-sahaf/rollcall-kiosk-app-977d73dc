@@ -22,6 +22,7 @@ export type Database = {
           kiosk_session_id: string | null
           marked_by: string | null
           method: Database["public"]["Enums"]["attendance_method"]
+          note: string | null
           occurred_at: string
           status: Database["public"]["Enums"]["attendance_status"]
           student_id: string
@@ -33,6 +34,7 @@ export type Database = {
           kiosk_session_id?: string | null
           marked_by?: string | null
           method: Database["public"]["Enums"]["attendance_method"]
+          note?: string | null
           occurred_at?: string
           status: Database["public"]["Enums"]["attendance_status"]
           student_id: string
@@ -44,6 +46,7 @@ export type Database = {
           kiosk_session_id?: string | null
           marked_by?: string | null
           method?: Database["public"]["Enums"]["attendance_method"]
+          note?: string | null
           occurred_at?: string
           status?: Database["public"]["Enums"]["attendance_status"]
           student_id?: string
@@ -158,6 +161,42 @@ export type Database = {
           id?: string
           school_name?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      school_settings: {
+        Row: {
+          absent_after_time: string
+          day_cutoff_time: string
+          id: string
+          logo_url: string | null
+          school_name: string | null
+          singleton: boolean
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          absent_after_time?: string
+          day_cutoff_time?: string
+          id?: string
+          logo_url?: string | null
+          school_name?: string | null
+          singleton?: boolean
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          absent_after_time?: string
+          day_cutoff_time?: string
+          id?: string
+          logo_url?: string | null
+          school_name?: string | null
+          singleton?: boolean
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }

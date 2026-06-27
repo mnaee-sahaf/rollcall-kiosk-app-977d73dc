@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, GraduationCap, BarChart3, Users, LogOut } from "lucide-react";
+import { LayoutDashboard, GraduationCap, BarChart3, Users, LogOut, Settings, Upload, UserSquare2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/landing/Logo";
 import { Button } from "@/components/ui/button";
@@ -46,9 +46,23 @@ export function AppShell({
             <BarChart3 className="h-4 w-4" /> Reports
           </Link>
           {isAdmin && (
-            <Link to="/app/teachers" className={linkClass(pathname.startsWith("/app/teachers"))}>
-              <Users className="h-4 w-4" /> Teachers
-            </Link>
+            <>
+              <div className="mt-4 mb-1 px-3 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Admin
+              </div>
+              <Link to="/app/students" className={linkClass(pathname.startsWith("/app/students"))}>
+                <UserSquare2 className="h-4 w-4" /> All students
+              </Link>
+              <Link to="/app/teachers" className={linkClass(pathname.startsWith("/app/teachers"))}>
+                <Users className="h-4 w-4" /> Teachers
+              </Link>
+              <Link to="/app/import" className={linkClass(pathname.startsWith("/app/import"))}>
+                <Upload className="h-4 w-4" /> Bulk import
+              </Link>
+              <Link to="/app/settings" className={linkClass(pathname.startsWith("/app/settings"))}>
+                <Settings className="h-4 w-4" /> Settings
+              </Link>
+            </>
           )}
         </nav>
         <div className="mt-auto">

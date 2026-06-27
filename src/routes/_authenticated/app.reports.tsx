@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listClasses } from "@/lib/classes.functions";
 import { getReport } from "@/lib/attendance.functions";
+import { getMyContext, listTeachers } from "@/lib/auth.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,10 +27,15 @@ function fmt(d: Date) {
 }
 
 function ReportsPage() {
+  const fCtx = useServerFn(getMyContext);
   const fClasses = useServerFn(listClasses);
+  const fTeachers = useServerFn(listTeachers);
   const fReport = useServerFn(getReport);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [classes, setClasses] = useState<Array<{ id: string; name: string }>>([]);
+  const [teachers, setTeachers] = useState<Array<{ user_id: string; full_name: string | null }>>([]);
   const [classId, setClassId] = useState<string>("");
+  const [teacherId, setTeacherId] = useState<string>("");
   const today = new Date();
   const defaultFrom = useMemo(() => {
     const d = new Date();
@@ -42,12 +48,23 @@ function ReportsPage() {
   const [granularity, setGranularity] = useState<"daily" | "weekly" | "monthly">("daily");
 
   useEffect(() => {
+    fCtx({}).then((c) => {
+      setIsAdmin(c.isAdmin);
+      if (c.isAdmin) fTeachers({}).then(setTeachers).catch(() => {});
+    });
     fClasses({}).then(setClasses);
-  }, [fClasses]);
+  }, [fCtx, fClasses, fTeachers]);
 
   useEffect(() => {
-    fReport({ data: { from, to, classId: classId || undefined } }).then(setReport);
-  }, [fReport, from, to, classId]);
+    fReport({
+      data: {
+        from,
+        to,
+        classId: classId || undefined,
+        teacherId: teacherId || undefined,
+      },
+    }).then(setReport);
+  }, [fReport, from, to, classId, teacherId]);
 
   const series = useMemo(() => {
     if (!report) return [];
@@ -89,12 +106,19 @@ function ReportsPage() {
     a.click();
   }
 
+  const overallRate = useMemo(() => {
+    if (!series.length) return 0;
+    const present = series.reduce((a, b) => a + b.present, 0);
+    const total = series.reduce((a, b) => a + b.total, 0);
+    return total === 0 ? 0 : Math.round((present / total) * 100);
+  }, [series]);
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Reports</h1>
 
       <Card className="p-5 mb-6">
-        <div className="grid sm:grid-cols-2 md:grid-cols-5 gap-3">
+        <div className={`grid sm:grid-cols-2 gap-3 ${isAdmin ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
           <div>
             <Label className="text-xs">From</Label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -118,6 +142,23 @@ function ReportsPage() {
               ))}
             </select>
           </div>
+          {isAdmin && (
+            <div>
+              <Label className="text-xs">Teacher</Label>
+              <select
+                value={teacherId}
+                onChange={(e) => setTeacherId(e.target.value)}
+                className="h-9 w-full rounded-md border px-2 text-sm"
+              >
+                <option value="">All teachers</option>
+                {teachers.map((t) => (
+                  <option key={t.user_id} value={t.user_id}>
+                    {t.full_name ?? t.user_id.slice(0, 8)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <Label className="text-xs">View</Label>
             <select
@@ -138,6 +179,21 @@ function ReportsPage() {
         </div>
       </Card>
 
+      <div className="grid sm:grid-cols-3 gap-3 mb-6">
+        <Card className="p-5">
+          <div className="text-xs uppercase text-muted-foreground">Overall rate</div>
+          <div className="text-3xl font-bold mt-1">{overallRate}%</div>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs uppercase text-muted-foreground">Events</div>
+          <div className="text-3xl font-bold mt-1">{report?.totalEvents ?? 0}</div>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs uppercase text-muted-foreground">Chronic absentees</div>
+          <div className="text-3xl font-bold mt-1">{report?.chronicAbsentees.length ?? 0}</div>
+        </Card>
+      </div>
+
       <Card className="p-5 mb-6">
         <h2 className="font-semibold mb-3">Attendance rate</h2>
         <div className="h-72">
@@ -151,36 +207,57 @@ function ReportsPage() {
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="text-xs text-muted-foreground mt-2">
-          {report?.totalEvents ?? 0} attendance events in range
-        </div>
       </Card>
 
-      <Card className="p-5">
-        <h2 className="font-semibold mb-3">Chronic absentees (3+ absences in range)</h2>
-        {report && report.chronicAbsentees.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs text-muted-foreground uppercase">
-              <tr>
-                <th className="py-2">Student</th>
-                <th className="py-2">Class</th>
-                <th className="py-2 text-right">Absences</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.chronicAbsentees.map((s) => (
-                <tr key={s.student_id} className="border-t">
-                  <td className="py-2 font-medium">{s.full_name}</td>
-                  <td className="py-2 text-muted-foreground">{s.class_name ?? "—"}</td>
-                  <td className="py-2 text-right font-mono">{s.absences}</td>
-                </tr>
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card className="p-5">
+          <h2 className="font-semibold mb-3">Class rollup (lowest first)</h2>
+          {report && report.classRollup.length > 0 ? (
+            <ul className="space-y-2">
+              {report.classRollup.map((c) => (
+                <li key={c.class_id} className="flex items-center gap-3">
+                  <div className="flex-1 text-sm">{c.class_name}</div>
+                  <div className="w-40 h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full ${c.rate >= 90 ? "bg-emerald-500" : c.rate >= 75 ? "bg-amber-500" : "bg-rose-500"}`}
+                      style={{ width: `${c.rate}%` }}
+                    />
+                  </div>
+                  <div className="w-10 text-right text-sm font-mono">{c.rate}%</div>
+                </li>
               ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="text-sm text-muted-foreground">No chronic absentees in this range.</p>
-        )}
-      </Card>
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No data.</p>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="font-semibold mb-3">Chronic absentees (3+ absences)</h2>
+          {report && report.chronicAbsentees.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-muted-foreground uppercase">
+                <tr>
+                  <th className="py-2">Student</th>
+                  <th className="py-2">Class</th>
+                  <th className="py-2 text-right">Absences</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.chronicAbsentees.map((s) => (
+                  <tr key={s.student_id} className="border-t">
+                    <td className="py-2 font-medium">{s.full_name}</td>
+                    <td className="py-2 text-muted-foreground">{s.class_name ?? "—"}</td>
+                    <td className="py-2 text-right font-mono">{s.absences}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-sm text-muted-foreground">No chronic absentees in this range.</p>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
