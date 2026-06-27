@@ -1,75 +1,83 @@
-## Full Admin / Teacher / Student Experience
+## End-to-end audit — findings and fixes
 
-Build out the remaining MVP surfaces on top of the existing schema. Students stay login-free (printed QR cards only); class-QR-scanned-by-students is deferred to V2.
+Gaps grouped by area. Each item is small and lands in this single pass.
+
+### 1. Auth & onboarding
+- **Email confirmation may be ON** — new sign-ups would not get a session, so the first-admin trigger flow appears to "do nothing". Disable email confirmation via `configure_auth` so sign-up = signed-in for MVP.
+- **`/auth` hydration mismatch** (visible in runtime errors). Mark the route `ssr: false` so the "already signed in" banner doesn't differ between server and client paint.
+- **No role assigned screen** is a dead end. Add: "Signed in as <email>. Sign out" + "Contact your admin" copy, and a sign-out button.
+- **Invite acceptance for existing users**: if an admin invites an email that already has an account, the current flow forces re-signup. Add a small `/app/invite/$token` accept route that, when signed in and the invite email matches, grants the teacher role via a new `acceptInvite` server fn (admin-bypassing via `supabaseAdmin`, validating token + email + expiry).
+
+### 2. Admin → teacher assignment
+- **`createClass` / `updateClass` UI** has no teacher selector for admins. Add a teacher `<select>` (populated from `listTeachers`) on:
+  - "New class" form in `/app/classes` (admin only).
+  - Class settings sheet in `/app/classes/$classId` (admin only) to reassign teacher.
+- **Authorization gap**: `listClassesWithMeta` is callable by any signed-in user and leaks teacher names via `supabaseAdmin`. Gate it to admin (same pattern as `listTeachers`).
+
+### 3. Roster editing bug (teacher view)
+- In `app.classes.$classId.tsx` the **note editor's Save** calls `handleMark(s.id, s.status ?? "present", note)` — if the student has no status yet, saving a note silently marks them **present**. Change to: if `s.status` is null, persist as `absent` (or whatever the current default rule is), or better, split "save note only" from "mark + note". Implementation: add a `setNote` path that updates note on the existing event or inserts with `status = s.status ?? 'absent'` only after confirming; safer is to require a status before allowing a note (disable note input until a status is set, with tooltip).
+
+### 4. Mobile navigation
+- `AppShell` sidebar is `hidden md:flex`. On phones there is no nav at all. Add a sticky top bar visible `< md` with the logo and a `Sheet`-based drawer containing the same links + sign-out.
+
+### 5. Kiosk polish
+- `getKioskBoard` should also return `school_settings` (name + logo) so the kiosk header brands per-school. Render logo + school name in the kiosk top bar.
+- "Start camera" requires HTTPS in production — add a hint message on http origins so teachers know why the camera button fails.
+- Show a large transient toast on each scan (full-screen flash green/red for ~1s) for kiosk visibility from a distance; the side list stays as the log.
+
+### 6. Public student lookup
+- The printed QR currently encodes only the raw `qr_token`, so a parent scanning with a phone camera gets a meaningless string instead of opening `/lookup/<token>`. Add a **second small QR** on the printable card encoding the full `${origin}/lookup/<qr_token>` URL labelled "Parent lookup", while keeping the existing kiosk QR. (Origin is captured at print time from `window.location.origin`.)
+
+### 7. Storage policies for `school-assets`
+- The bucket is private and there are no storage RLS policies in the schema dump, so admin logo upload will 403. Add policies on `storage.objects`:
+  - `SELECT`/`INSERT`/`UPDATE`/`DELETE` on `bucket_id = 'school-assets'` to `authenticated` where `has_role(auth.uid(),'admin')`.
+  - Public `SELECT` on `bucket_id = 'school-assets'` for `anon` so signed-URL fallback / printable sheet / kiosk can load the logo even if the URL is treated as public (or keep private and only use signed URLs — pick one; plan picks public-read since logos are not sensitive, which lets us drop the signed-URL fragility).
+- Switch logo storage in `app.settings.tsx` to use `getPublicUrl` instead of `createSignedUrl` once the bucket is public-read.
+
+### 8. Reports & exports
+- Reports class dropdown for admin should list all classes; it already does via `listClasses` + admin RLS. Verify no extra change needed.
+- Add a "Today" / "This week" / "This month" preset row above the date inputs for one-click ranges.
+- Export CSV currently exports the chart series only; also include the chronic-absentees table as a second downloadable.
+
+### 9. Misc
+- Landing nav: ensure "Try the demo" route works and "Sign in" / "Create account" point to `/auth` with the right mode (already in place — verify).
+- Add a small "Kiosk" link in the class detail page's session card pointing to the active kiosk URL (already present as "Open kiosk").
+- Add a 404 boundary on `/lookup/$qrToken` and `/kiosk/$token` (currently they render a custom not-found inline, which is fine — leave).
 
 ---
 
-### 1. Schema additions (one migration)
+## Technical notes
 
-- `attendance_events`: add `note text null` (reason for absent/late).
-- `school_settings` (singleton row): `school_name`, `logo_url`, `day_cutoff_time` (e.g. 09:00 = late after), `absent_after_time` (e.g. 10:30 = absent if no scan), `timezone`.
-- `students`: add `external_id` uniqueness per class (already exists as column — add unique index).
-- Storage bucket `school-assets` (public) for logo uploads.
-- Grants + RLS: settings readable by any authenticated user, writable only by admin.
+- **Files touched**:
+  - `src/lib/auth.functions.ts` — add `acceptInvite`.
+  - `src/lib/classes.functions.ts` — admin gate on `listClassesWithMeta`; accept `teacherId` in `createClass` form path (already supported, just expose in UI).
+  - `src/lib/kiosk.functions.ts` — include settings in `getKioskBoard`.
+  - `src/lib/attendance.functions.ts` — add `setStudentNote` (note-only update) so the UI doesn't have to fabricate a status.
+  - `src/routes/_authenticated/app.tsx` — improve "no role" empty state.
+  - `src/routes/_authenticated/app.classes.tsx` — teacher selector for admin.
+  - `src/routes/_authenticated/app.classes.$classId.tsx` — teacher reassignment in settings sheet; fix note-save bug; use `setStudentNote`.
+  - `src/routes/_authenticated/app.classes.$classId.qr.tsx` — second QR for parent lookup URL.
+  - `src/routes/_authenticated/app.settings.tsx` — switch to public URL for logo.
+  - `src/routes/auth.tsx` — `ssr: false`.
+  - `src/routes/kiosk.$token.tsx` — branded header, scan flash, HTTPS hint.
+  - `src/routes/_authenticated/app.invite.$token.tsx` — new accept page.
+  - `src/components/app/AppShell.tsx` — mobile top bar + Sheet drawer.
+- **Migrations** (single migration):
+  1. Storage policies on `storage.objects` for `school-assets` bucket (admin write, public read), and `UPDATE public.storage.buckets SET public=true WHERE id='school-assets'`.
+- **Auth config**: call `configure_auth` to disable email confirmation.
+- No schema changes to app tables; no RLS changes — existing admin-aware policies already cover the new flows.
 
-### 2. Admin experience
+---
 
-- **`/app/admin/settings`** — school name, logo upload, day cutoff & absent-after times, timezone. Logo appears on printable QR sheets and kiosk header.
-- **`/app/admin/classes`** — school-wide class list with teacher column, create/edit/delete/reassign teacher.
-- **`/app/admin/students`** — searchable, paginated all-students table with class filter; edit/move/deactivate.
-- **Bulk CSV import** (`/app/admin/import`):
-  - Teachers CSV (email, full_name) → creates `teacher_invites` rows in batch.
-  - Students CSV (class_name, full_name, external_id) → upserts students, auto-creates classes if missing; downloadable error report row-by-row.
-- **`/app/reports`** for admin gains: teacher filter, per-teacher comparison bar chart, chronic-absentee table (≥3 absences in range, configurable).
+## Build order
 
-### 3. Teacher experience (additions to existing pages)
+1. Migration + bucket policy + `configure_auth` (disable email confirm).
+2. Server-fn additions (`acceptInvite`, `setStudentNote`, admin gate, kiosk board with settings).
+3. UI fixes: AppShell mobile nav, auth ssr false, no-role state, note-save bug.
+4. Admin teacher assignment in class create/edit.
+5. Kiosk header branding + scan flash.
+6. Printable sheet second QR for parent lookup.
+7. Invite accept page.
+8. Reports presets + chronic CSV.
 
-- **Class detail (`/app/classes/$classId`)** roster table:
-  - "Mark all present" button → bulk upsert today's events; then toggle individual exceptions.
-  - Per-row Present / Late / Absent buttons + "note" popover (saves `note`).
-  - Date picker to backfill/correct prior days.
-- **Student drawer** from roster row: attendance history (last 30 days strip + table), Re-issue QR, Export CSV/PDF for that student.
-- **Class export**: roster CSV and attendance CSV for selected date range from class detail.
-- Kiosk session card already exists — add "Copy link", "Show QR" (so a tablet can scan to open), and "Revoke" actions visible while active.
-
-### 4. Student experience (no login)
-
-Since students don't sign in, their "experience" is the kiosk + printed card:
-
-- **Printable QR card sheet** (`/app/classes/$classId/qr`) — already scaffolded. Polish: school logo, class name, student name, external ID, QR, cut guides; A4 4×2 grid; "Print" button.
-- **Kiosk scan feedback** (`/kiosk/$token`) — big success state with student name, photo placeholder, time, "X / Y present" counter; clear error states for unknown QR, wrong class, already-marked-today, expired session.
-- **Public student lookup** (`/lookup/$qrToken`) — read-only page a parent/student can open by scanning their own card with a phone camera: shows student name, class, today's status, and last 14 days. Implemented as a server fn with a publishable-key read against narrow `TO anon` policy on a SQL view that exposes only the safe columns.
-
-### 5. Reports & analytics
-
-- Date-range presets (today, this week, this month, custom), granularity (daily/weekly/monthly).
-- Attendance rate line chart, per-class bar chart, chronic absentees table.
-- CSV export of the underlying filtered rows.
-- Admin sees school-wide + per-teacher slice; teacher sees only their classes.
-
-### 6. Technical notes
-
-- New server fns in `src/lib/`: `settings.functions.ts`, `import.functions.ts` (CSV parsed client-side, rows sent in batches of 100), extend `attendance.functions.ts` with `bulkMarkPresent`, `markWithNote`, `getStudentHistory`, `studentLookupPublic` (no auth).
-- Use `papaparse` for CSV parse/stringify (client + server).
-- Use `jspdf` + `qrcode` for per-student PDF export; printable sheet stays HTML-print.
-- Storage upload via existing `supabase.storage` client; signed-in admin uploads to `school-assets/logo.<ext>` with overwrite.
-- All new tables/columns get explicit GRANTs; settings policy uses `has_role(auth.uid(),'admin')`; student lookup view has `GRANT SELECT TO anon` with policy filtering to active students only.
-- Sidebar: split into Admin section (Settings, Teachers, All classes, All students, Import) vs Teacher section (My classes, Reports). Both see Dashboard + Reports.
-
-### Build order
-
-1. Migration (settings table, note column, storage bucket, public lookup view + policy).
-2. School settings page + logo upload, wire into kiosk + QR sheet header.
-3. Teacher roster upgrades: bulk mark, notes, date picker, student drawer + history + per-student export.
-4. Admin all-classes / all-students management pages.
-5. CSV bulk import (teachers + students) with error report.
-6. Reports upgrades: teacher filter, per-teacher chart, chronic absentees, CSV export.
-7. Public `/lookup/$qrToken` page.
-8. Kiosk polish: success/error states, logo, counter, recent scans styling.
-
-### Out of scope (V2)
-
-- Student login + companion app
-- Rotating class QR scanned from student phones
-- Parent notifications (SMS/email)
-- Multi-teacher per class
+All changes verified against existing RLS (admin path covered everywhere) and the existing bearer middleware in `src/start.ts`.
