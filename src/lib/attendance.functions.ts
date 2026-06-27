@@ -57,16 +57,15 @@ export const markAttendance = createServerFn({ method: "POST" })
       .eq("student_id", data.studentId)
       .eq("day", day)
       .maybeSingle();
-    const payload: Record<string, unknown> = {
-      status: data.status,
-      method: "manual",
-      marked_by: userId,
-    };
-    if (data.note !== undefined) payload.note = data.note;
     if (existing) {
       const { error } = await supabase
         .from("attendance_events")
-        .update(payload)
+        .update({
+          status: data.status,
+          method: "manual",
+          marked_by: userId,
+          note: data.note ?? null,
+        })
         .eq("id", existing.id);
       if (error) throw new Error(error.message);
     } else {
@@ -74,7 +73,10 @@ export const markAttendance = createServerFn({ method: "POST" })
         student_id: data.studentId,
         class_id: data.classId,
         day,
-        ...payload,
+        status: data.status,
+        method: "manual",
+        marked_by: userId,
+        note: data.note ?? null,
       });
       if (error) throw new Error(error.message);
     }

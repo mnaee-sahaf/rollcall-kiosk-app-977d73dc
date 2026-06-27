@@ -80,7 +80,7 @@ export const updateClass = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = {};
+    const patch: { name?: string; grade?: string | null; teacher_id?: string } = {};
     if (data.name !== undefined) patch.name = data.name;
     if (data.grade !== undefined) patch.grade = data.grade;
     if (data.teacherId !== undefined) patch.teacher_id = data.teacherId;
@@ -157,7 +157,12 @@ export const updateStudent = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      full_name?: string;
+      external_id?: string | null;
+      class_id?: string;
+      active?: boolean;
+    } = {};
     if (data.full_name !== undefined) patch.full_name = data.full_name;
     if (data.external_id !== undefined) patch.external_id = data.external_id;
     if (data.class_id !== undefined) patch.class_id = data.class_id;
