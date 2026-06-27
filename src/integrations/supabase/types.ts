@@ -22,6 +22,7 @@ export type Database = {
           kiosk_session_id: string | null
           marked_by: string | null
           method: Database["public"]["Enums"]["attendance_method"]
+          note: string | null
           occurred_at: string
           status: Database["public"]["Enums"]["attendance_status"]
           student_id: string
@@ -33,6 +34,7 @@ export type Database = {
           kiosk_session_id?: string | null
           marked_by?: string | null
           method: Database["public"]["Enums"]["attendance_method"]
+          note?: string | null
           occurred_at?: string
           status: Database["public"]["Enums"]["attendance_status"]
           student_id: string
@@ -44,6 +46,7 @@ export type Database = {
           kiosk_session_id?: string | null
           marked_by?: string | null
           method?: Database["public"]["Enums"]["attendance_method"]
+          note?: string | null
           occurred_at?: string
           status?: Database["public"]["Enums"]["attendance_status"]
           student_id?: string
@@ -55,6 +58,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "classes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_events_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "student_lookup"
+            referencedColumns: ["class_id"]
           },
           {
             foreignKeyName: "attendance_events_kiosk_session_id_fkey"
@@ -135,6 +145,13 @@ export type Database = {
             referencedRelation: "classes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "kiosk_sessions_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "student_lookup"
+            referencedColumns: ["class_id"]
+          },
         ]
       }
       profiles: {
@@ -158,6 +175,42 @@ export type Database = {
           id?: string
           school_name?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      school_settings: {
+        Row: {
+          absent_after_time: string
+          day_cutoff_time: string
+          id: string
+          logo_url: string | null
+          school_name: string | null
+          singleton: boolean
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          absent_after_time?: string
+          day_cutoff_time?: string
+          id?: string
+          logo_url?: string | null
+          school_name?: string | null
+          singleton?: boolean
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          absent_after_time?: string
+          day_cutoff_time?: string
+          id?: string
+          logo_url?: string | null
+          school_name?: string | null
+          singleton?: boolean
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -196,6 +249,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "classes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "students_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "student_lookup"
+            referencedColumns: ["class_id"]
           },
         ]
       }
@@ -252,7 +312,17 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      student_lookup: {
+        Row: {
+          class_id: string | null
+          class_name: string | null
+          external_id: string | null
+          grade: string | null
+          qr_token: string | null
+          student_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
