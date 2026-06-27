@@ -123,6 +123,8 @@ function ClassDetailPage() {
     setSessions(s);
     setEditName(c.cls.name);
     setEditGrade(c.cls.grade ?? "");
+    setEditTeacher(c.cls.teacher_id);
+
   }, [classId, day, fGetClass, fRoster, fListSessions]);
 
   useEffect(() => {
