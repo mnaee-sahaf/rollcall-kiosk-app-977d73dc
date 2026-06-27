@@ -1,83 +1,76 @@
-## End-to-end audit — findings and fixes
+# Admin onboarding wizard
 
-Gaps grouped by area. Each item is small and lands in this single pass.
+A guided, step-by-step setup that takes a brand-new account owner from empty dashboard → fully usable RollCall in ~3 minutes. Triggered automatically on the first admin's first visit to `/app`, and resumable from a card on the dashboard.
 
-### 1. Auth & onboarding
-- **Email confirmation may be ON** — new sign-ups would not get a session, so the first-admin trigger flow appears to "do nothing". Disable email confirmation via `configure_auth` so sign-up = signed-in for MVP.
-- **`/auth` hydration mismatch** (visible in runtime errors). Mark the route `ssr: false` so the "already signed in" banner doesn't differ between server and client paint.
-- **No role assigned screen** is a dead end. Add: "Signed in as <email>. Sign out" + "Contact your admin" copy, and a sign-out button.
-- **Invite acceptance for existing users**: if an admin invites an email that already has an account, the current flow forces re-signup. Add a small `/app/invite/$token` accept route that, when signed in and the invite email matches, grants the teacher role via a new `acceptInvite` server fn (admin-bypassing via `supabaseAdmin`, validating token + email + expiry).
+## Trigger logic
 
-### 2. Admin → teacher assignment
-- **`createClass` / `updateClass` UI** has no teacher selector for admins. Add a teacher `<select>` (populated from `listTeachers`) on:
-  - "New class" form in `/app/classes` (admin only).
-  - Class settings sheet in `/app/classes/$classId` (admin only) to reassign teacher.
-- **Authorization gap**: `listClassesWithMeta` is callable by any signed-in user and leaks teacher names via `supabaseAdmin`. Gate it to admin (same pattern as `listTeachers`).
+- Add an `onboarded_at timestamptz` column to `school_settings` (singleton row).
+- `getMyContext` returns `needsOnboarding: boolean` = `isAdmin && onboarded_at is null`.
+- On `/app`, if `needsOnboarding`, redirect to `/app/onboarding`. Wizard can be skipped (sets `onboarded_at`), but a "Finish setup" card stays on the dashboard until every step has real data (≥1 class, ≥1 student).
 
-### 3. Roster editing bug (teacher view)
-- In `app.classes.$classId.tsx` the **note editor's Save** calls `handleMark(s.id, s.status ?? "present", note)` — if the student has no status yet, saving a note silently marks them **present**. Change to: if `s.status` is null, persist as `absent` (or whatever the current default rule is), or better, split "save note only" from "mark + note". Implementation: add a `setNote` path that updates note on the existing event or inserts with `status = s.status ?? 'absent'` only after confirming; safer is to require a status before allowing a note (disable note input until a status is set, with tooltip).
+## Wizard route: `/app/onboarding`
 
-### 4. Mobile navigation
-- `AppShell` sidebar is `hidden md:flex`. On phones there is no nav at all. Add a sticky top bar visible `< md` with the logo and a `Sheet`-based drawer containing the same links + sign-out.
+Single full-screen route under `_authenticated/`, with a left rail showing 5 numbered steps, current step highlighted, completed steps with a checkmark. "Skip for now" link in the top-right writes `onboarded_at = now()` and returns to `/app`.
 
-### 5. Kiosk polish
-- `getKioskBoard` should also return `school_settings` (name + logo) so the kiosk header brands per-school. Render logo + school name in the kiosk top bar.
-- "Start camera" requires HTTPS in production — add a hint message on http origins so teachers know why the camera button fails.
-- Show a large transient toast on each scan (full-screen flash green/red for ~1s) for kiosk visibility from a distance; the side list stays as the log.
+### Step 1 — School profile
+- Inputs: School name (required), logo upload (optional, goes to existing `school-assets` bucket), timezone, day cutoff time, absent-after time (sensible defaults pre-filled).
+- Saves via existing `updateSettings`.
+- "Continue" enabled once school name is set.
 
-### 6. Public student lookup
-- The printed QR currently encodes only the raw `qr_token`, so a parent scanning with a phone camera gets a meaningless string instead of opening `/lookup/<token>`. Add a **second small QR** on the printable card encoding the full `${origin}/lookup/<qr_token>` URL labelled "Parent lookup", while keeping the existing kiosk QR. (Origin is captured at print time from `window.location.origin`.)
+### Step 2 — Invite teachers (optional)
+- Repeatable "add row" form: email + optional name.
+- Bulk-creates invites via existing `inviteTeacher` (looped) and shows each generated invite link with copy button (mail delivery isn't wired yet — admin copies and shares).
+- "Skip" allowed; admin can stay sole user.
 
-### 7. Storage policies for `school-assets`
-- The bucket is private and there are no storage RLS policies in the schema dump, so admin logo upload will 403. Add policies on `storage.objects`:
-  - `SELECT`/`INSERT`/`UPDATE`/`DELETE` on `bucket_id = 'school-assets'` to `authenticated` where `has_role(auth.uid(),'admin')`.
-  - Public `SELECT` on `bucket_id = 'school-assets'` for `anon` so signed-URL fallback / printable sheet / kiosk can load the logo even if the URL is treated as public (or keep private and only use signed URLs — pick one; plan picks public-read since logos are not sensitive, which lets us drop the signed-URL fragility).
-- Switch logo storage in `app.settings.tsx` to use `getPublicUrl` instead of `createSignedUrl` once the bucket is public-read.
+### Step 3 — Create your first class
+- Inputs: class name (required), grade (optional), teacher (dropdown: yourself + invited teachers; defaults to self).
+- Uses existing `createClass`. Stores returned `classId` in wizard state for steps 4–5.
+- Option to add another class inline before moving on.
 
-### 8. Reports & exports
-- Reports class dropdown for admin should list all classes; it already does via `listClasses` + admin RLS. Verify no extra change needed.
-- Add a "Today" / "This week" / "This month" preset row above the date inputs for one-click ranges.
-- Export CSV currently exports the chart series only; also include the chronic-absentees table as a second downloadable.
+### Step 4 — Add students
+- Two tabs:
+  - **Quick add**: textarea, one student name per line (optional `, externalId`). Parses on submit, bulk-inserts via a new `bulkAddStudents` server fn.
+  - **CSV import**: re-uses the existing `/app/import` flow embedded as a section (drag-drop + preview), defaulting to the class created in step 3.
+- Shows running count: "12 students added".
+- "Continue" enabled once ≥1 student exists for the class.
 
-### 9. Misc
-- Landing nav: ensure "Try the demo" route works and "Sign in" / "Create account" point to `/auth` with the right mode (already in place — verify).
-- Add a small "Kiosk" link in the class detail page's session card pointing to the active kiosk URL (already present as "Open kiosk").
-- Add a 404 boundary on `/lookup/$qrToken` and `/kiosk/$token` (currently they render a custom not-found inline, which is fine — leave).
+### Step 5 — Try it
+Two side-by-side cards:
+- **Print QR sheet** — direct link to `/app/classes/$classId/qr` in a new tab.
+- **Open a kiosk** — creates a 2-hour kiosk session via existing `createKioskSession` and opens `/kiosk/$token` in a new tab.
 
----
+Finish button writes `onboarded_at = now()` and navigates to `/app` with a success toast.
 
-## Technical notes
+## Dashboard changes
 
-- **Files touched**:
-  - `src/lib/auth.functions.ts` — add `acceptInvite`.
-  - `src/lib/classes.functions.ts` — admin gate on `listClassesWithMeta`; accept `teacherId` in `createClass` form path (already supported, just expose in UI).
-  - `src/lib/kiosk.functions.ts` — include settings in `getKioskBoard`.
-  - `src/lib/attendance.functions.ts` — add `setStudentNote` (note-only update) so the UI doesn't have to fabricate a status.
-  - `src/routes/_authenticated/app.tsx` — improve "no role" empty state.
-  - `src/routes/_authenticated/app.classes.tsx` — teacher selector for admin.
-  - `src/routes/_authenticated/app.classes.$classId.tsx` — teacher reassignment in settings sheet; fix note-save bug; use `setStudentNote`.
-  - `src/routes/_authenticated/app.classes.$classId.qr.tsx` — second QR for parent lookup URL.
-  - `src/routes/_authenticated/app.settings.tsx` — switch to public URL for logo.
-  - `src/routes/auth.tsx` — `ssr: false`.
-  - `src/routes/kiosk.$token.tsx` — branded header, scan flash, HTTPS hint.
-  - `src/routes/_authenticated/app.invite.$token.tsx` — new accept page.
-  - `src/components/app/AppShell.tsx` — mobile top bar + Sheet drawer.
-- **Migrations** (single migration):
-  1. Storage policies on `storage.objects` for `school-assets` bucket (admin write, public read), and `UPDATE public.storage.buckets SET public=true WHERE id='school-assets'`.
-- **Auth config**: call `configure_auth` to disable email confirmation.
-- No schema changes to app tables; no RLS changes — existing admin-aware policies already cover the new flows.
+- If admin has skipped or partly completed onboarding, show a top "Finish setting up RollCall" card listing remaining steps as checkboxes, with a "Resume" button that deep-links into the wizard at the first incomplete step (`?step=N`).
+- Card disappears once all real-data conditions are met (school name set, ≥1 class, ≥1 student).
 
----
+## Backend changes
 
-## Build order
+1. **Migration**: add `onboarded_at timestamptz` to `public.school_settings`.
+2. **`getMyContext`**: include `needsOnboarding` and a small `setupProgress` object `{ hasSchoolName, hasTeachers, hasClasses, hasStudents, onboardedAt }` so the dashboard card can render without extra round-trips.
+3. **`completeOnboarding` server fn** (admin-only): sets `onboarded_at = now()`.
+4. **`bulkAddStudents` server fn** (admin/teacher who owns the class): `{ classId, names: Array<{ full_name, external_id? }> }`, returns created rows. Reuses existing student-insert logic.
 
-1. Migration + bucket policy + `configure_auth` (disable email confirm).
-2. Server-fn additions (`acceptInvite`, `setStudentNote`, admin gate, kiosk board with settings).
-3. UI fixes: AppShell mobile nav, auth ssr false, no-role state, note-save bug.
-4. Admin teacher assignment in class create/edit.
-5. Kiosk header branding + scan flash.
-6. Printable sheet second QR for parent lookup.
-7. Invite accept page.
-8. Reports presets + chronic CSV.
+## Files to add / change
 
-All changes verified against existing RLS (admin path covered everywhere) and the existing bearer middleware in `src/start.ts`.
+- `supabase/migrations/<ts>_onboarded_at.sql` — add column.
+- `src/lib/auth.functions.ts` — extend `getMyContext`, add `completeOnboarding`.
+- `src/lib/classes.functions.ts` — add `bulkAddStudents`.
+- `src/routes/_authenticated/app.onboarding.tsx` — new wizard route, contains all 5 steps as in-page components driven by `?step=` search param.
+- `src/components/onboarding/` — `WizardShell.tsx` (rail + progress), `StepSchool.tsx`, `StepTeachers.tsx`, `StepClass.tsx`, `StepStudents.tsx`, `StepTry.tsx`.
+- `src/components/app/SetupChecklistCard.tsx` — dashboard card.
+- `src/routes/_authenticated/app.index.tsx` — render checklist card when `setupProgress` is incomplete; redirect to wizard on first admin visit.
+- `src/routes/_authenticated/app.tsx` (or shell) — no change needed beyond letting the wizard render full-bleed.
+
+## Non-goals (explicit)
+
+- No email sending for teacher invites (still copy-link). Hook into transactional email later.
+- No payment / plan selection step.
+- No re-running the wizard for non-admin users; teachers see the normal dashboard.
+
+## Open questions
+
+1. Should "Skip for now" be allowed at every step, or only after the school profile is filled?
+2. Do you want the wizard to also seed a couple of demo students so the admin can immediately try a kiosk scan even before importing real data?
