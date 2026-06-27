@@ -1,0 +1,92 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+export const getMyContext = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const [rolesRes, profileRes] = await Promise.all([
+      supabase.from("user_roles").select("role").eq("user_id", userId),
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+    ]);
+    const roles = (rolesRes.data ?? []).map((r: { role: string }) => r.role);
+    return {
+      userId,
+      email: context.claims.email as string | undefined,
+      roles,
+      isAdmin: roles.includes("admin"),
+      isTeacher: roles.includes("teacher"),
+      profile: profileRes.data,
+    };
+  });
+
+export const inviteTeacher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ email: z.string().email() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: isAdmin } = await supabase.rpc("has_role", {
+      _user_id: userId,
+      _role: "admin",
+    }).single().then(() => ({ data: true })).catch(() => ({ data: false }));
+    // Fallback: check via roles table since has_role is service_role only
+    const { data: adminRows } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin");
+    if (!adminRows || adminRows.length === 0) {
+      throw new Error("Forbidden: admin only");
+    }
+    void isAdmin;
+
+    const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+    const { data: inv, error } = await supabase
+      .from("teacher_invites")
+      .insert({ email: data.email, token, invited_by: userId })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return { invite: inv };
+  });
+
+export const listTeachers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: adminRows } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin");
+    if (!adminRows || adminRows.length === 0) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: teacherRoles } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, role, created_at")
+      .eq("role", "teacher");
+    const ids = (teacherRoles ?? []).map((r) => r.user_id);
+    const { data: profs } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+    const profById = new Map((profs ?? []).map((p) => [p.id, p]));
+    return (teacherRoles ?? []).map((r) => ({
+      user_id: r.user_id,
+      full_name: profById.get(r.user_id)?.full_name ?? null,
+      created_at: r.created_at,
+    }));
+  });
+
+export const listInvites = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase } = context;
+    const { data, error } = await supabase
+      .from("teacher_invites")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data;
+  });
