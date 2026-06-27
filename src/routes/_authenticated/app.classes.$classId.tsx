@@ -569,8 +569,6 @@ function ClassDetailPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Hidden textarea import to keep tree-shaking accurate */}
-      <Textarea className="hidden" />
     </div>
   );
 }
