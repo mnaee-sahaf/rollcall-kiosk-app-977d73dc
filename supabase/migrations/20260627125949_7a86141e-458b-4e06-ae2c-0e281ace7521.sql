@@ -1,0 +1,1 @@
+ALTER VIEW public.student_lookup SET (security_invoker = true);
