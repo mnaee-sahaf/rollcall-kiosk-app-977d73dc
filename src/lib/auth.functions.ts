@@ -26,11 +26,6 @@ export const inviteTeacher = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ email: z.string().email() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { data: isAdmin } = await supabase.rpc("has_role", {
-      _user_id: userId,
-      _role: "admin",
-    }).single().then(() => ({ data: true })).catch(() => ({ data: false }));
-    // Fallback: check via roles table since has_role is service_role only
     const { data: adminRows } = await supabase
       .from("user_roles")
       .select("role")
@@ -39,7 +34,6 @@ export const inviteTeacher = createServerFn({ method: "POST" })
     if (!adminRows || adminRows.length === 0) {
       throw new Error("Forbidden: admin only");
     }
-    void isAdmin;
 
     const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
     const { data: inv, error } = await supabase
