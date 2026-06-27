@@ -583,7 +583,25 @@ function ClassDetailPage() {
               <Label>Grade</Label>
               <Input value={editGrade} onChange={(e) => setEditGrade(e.target.value)} />
             </div>
+            {isAdmin && (
+              <div>
+                <Label>Teacher</Label>
+                <select
+                  value={editTeacher}
+                  onChange={(e) => setEditTeacher(e.target.value)}
+                  className="h-9 w-full rounded-md border px-2 text-sm"
+                >
+                  {teachers.length === 0 && <option value={editTeacher}>Current teacher</option>}
+                  {teachers.map((t) => (
+                    <option key={t.user_id} value={t.user_id}>
+                      {t.full_name ?? t.user_id.slice(0, 8)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <Button onClick={handleSaveSettings}>Save</Button>
+
             <div className="pt-6 border-t">
               <Button
                 variant="ghost"
