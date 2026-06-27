@@ -76,7 +76,12 @@ function ClassDetailPage() {
   const fCreateSession = useServerFn(createKioskSession);
   const fListSessions = useServerFn(listKioskSessions);
   const fRevoke = useServerFn(revokeKioskSession);
+  const fSetNote = useServerFn(setStudentNote);
+  const fCtx = useServerFn(getMyContext);
+  const fTeachers = useServerFn(listTeachers);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [teachers, setTeachers] = useState<Array<{ user_id: string; full_name: string | null }>>([]);
   const [cls, setCls] = useState<ClassRow | null>(null);
   const [roster, setRoster] = useState<Roster>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -91,12 +96,21 @@ function ClassDetailPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editGrade, setEditGrade] = useState("");
+  const [editTeacher, setEditTeacher] = useState("");
   const [exportFrom, setExportFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
     return d.toISOString().slice(0, 10);
   });
   const [exportTo, setExportTo] = useState(new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    fCtx({}).then((c) => {
+      setIsAdmin(c.isAdmin);
+      if (c.isAdmin) fTeachers({}).then(setTeachers).catch(() => {});
+    });
+  }, [fCtx, fTeachers]);
+
 
   const refresh = useCallback(async () => {
     const [c, r, s] = await Promise.all([
