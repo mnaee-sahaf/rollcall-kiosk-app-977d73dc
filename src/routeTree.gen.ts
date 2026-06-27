@@ -13,11 +13,15 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LookupQrTokenRouteImport } from './routes/lookup.$qrToken'
 import { Route as KioskTokenRouteImport } from './routes/kiosk.$token'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/app.index'
 import { Route as AuthenticatedAppTeachersRouteImport } from './routes/_authenticated/app.teachers'
+import { Route as AuthenticatedAppStudentsRouteImport } from './routes/_authenticated/app.students'
+import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/app.settings'
 import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authenticated/app.reports'
+import { Route as AuthenticatedAppImportRouteImport } from './routes/_authenticated/app.import'
 import { Route as AuthenticatedAppClassesRouteImport } from './routes/_authenticated/app.classes'
 import { Route as AuthenticatedAppClassesClassIdRouteImport } from './routes/_authenticated/app.classes.$classId'
 import { Route as AuthenticatedAppClassesClassIdQrRouteImport } from './routes/_authenticated/app.classes.$classId.qr'
@@ -41,6 +45,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LookupQrTokenRoute = LookupQrTokenRouteImport.update({
+  id: '/lookup/$qrToken',
+  path: '/lookup/$qrToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const KioskTokenRoute = KioskTokenRouteImport.update({
   id: '/kiosk/$token',
   path: '/kiosk/$token',
@@ -62,9 +71,26 @@ const AuthenticatedAppTeachersRoute =
     path: '/teachers',
     getParentRoute: () => AuthenticatedAppRoute,
   } as any)
+const AuthenticatedAppStudentsRoute =
+  AuthenticatedAppStudentsRouteImport.update({
+    id: '/students',
+    path: '/students',
+    getParentRoute: () => AuthenticatedAppRoute,
+  } as any)
+const AuthenticatedAppSettingsRoute =
+  AuthenticatedAppSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedAppRoute,
+  } as any)
 const AuthenticatedAppReportsRoute = AuthenticatedAppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
+const AuthenticatedAppImportRoute = AuthenticatedAppImportRouteImport.update({
+  id: '/import',
+  path: '/import',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
 const AuthenticatedAppClassesRoute = AuthenticatedAppClassesRouteImport.update({
@@ -91,8 +117,12 @@ export interface FileRoutesByFullPath {
   '/demo': typeof DemoRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
+  '/lookup/$qrToken': typeof LookupQrTokenRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
+  '/app/import': typeof AuthenticatedAppImportRoute
   '/app/reports': typeof AuthenticatedAppReportsRoute
+  '/app/settings': typeof AuthenticatedAppSettingsRoute
+  '/app/students': typeof AuthenticatedAppStudentsRoute
   '/app/teachers': typeof AuthenticatedAppTeachersRoute
   '/app/': typeof AuthenticatedAppIndexRoute
   '/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
@@ -103,8 +133,12 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/demo': typeof DemoRoute
   '/kiosk/$token': typeof KioskTokenRoute
+  '/lookup/$qrToken': typeof LookupQrTokenRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
+  '/app/import': typeof AuthenticatedAppImportRoute
   '/app/reports': typeof AuthenticatedAppReportsRoute
+  '/app/settings': typeof AuthenticatedAppSettingsRoute
+  '/app/students': typeof AuthenticatedAppStudentsRoute
   '/app/teachers': typeof AuthenticatedAppTeachersRoute
   '/app': typeof AuthenticatedAppIndexRoute
   '/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
@@ -118,8 +152,12 @@ export interface FileRoutesById {
   '/demo': typeof DemoRoute
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
+  '/lookup/$qrToken': typeof LookupQrTokenRoute
   '/_authenticated/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
+  '/_authenticated/app/import': typeof AuthenticatedAppImportRoute
   '/_authenticated/app/reports': typeof AuthenticatedAppReportsRoute
+  '/_authenticated/app/settings': typeof AuthenticatedAppSettingsRoute
+  '/_authenticated/app/students': typeof AuthenticatedAppStudentsRoute
   '/_authenticated/app/teachers': typeof AuthenticatedAppTeachersRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
   '/_authenticated/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
@@ -133,8 +171,12 @@ export interface FileRouteTypes {
     | '/demo'
     | '/app'
     | '/kiosk/$token'
+    | '/lookup/$qrToken'
     | '/app/classes'
+    | '/app/import'
     | '/app/reports'
+    | '/app/settings'
+    | '/app/students'
     | '/app/teachers'
     | '/app/'
     | '/app/classes/$classId'
@@ -145,8 +187,12 @@ export interface FileRouteTypes {
     | '/auth'
     | '/demo'
     | '/kiosk/$token'
+    | '/lookup/$qrToken'
     | '/app/classes'
+    | '/app/import'
     | '/app/reports'
+    | '/app/settings'
+    | '/app/students'
     | '/app/teachers'
     | '/app'
     | '/app/classes/$classId'
@@ -159,8 +205,12 @@ export interface FileRouteTypes {
     | '/demo'
     | '/_authenticated/app'
     | '/kiosk/$token'
+    | '/lookup/$qrToken'
     | '/_authenticated/app/classes'
+    | '/_authenticated/app/import'
     | '/_authenticated/app/reports'
+    | '/_authenticated/app/settings'
+    | '/_authenticated/app/students'
     | '/_authenticated/app/teachers'
     | '/_authenticated/app/'
     | '/_authenticated/app/classes/$classId'
@@ -173,6 +223,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   DemoRoute: typeof DemoRoute
   KioskTokenRoute: typeof KioskTokenRoute
+  LookupQrTokenRoute: typeof LookupQrTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -205,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lookup/$qrToken': {
+      id: '/lookup/$qrToken'
+      path: '/lookup/$qrToken'
+      fullPath: '/lookup/$qrToken'
+      preLoaderRoute: typeof LookupQrTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/kiosk/$token': {
       id: '/kiosk/$token'
       path: '/kiosk/$token'
@@ -233,11 +291,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppTeachersRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/students': {
+      id: '/_authenticated/app/students'
+      path: '/students'
+      fullPath: '/app/students'
+      preLoaderRoute: typeof AuthenticatedAppStudentsRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/_authenticated/app/settings': {
+      id: '/_authenticated/app/settings'
+      path: '/settings'
+      fullPath: '/app/settings'
+      preLoaderRoute: typeof AuthenticatedAppSettingsRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/reports': {
       id: '/_authenticated/app/reports'
       path: '/reports'
       fullPath: '/app/reports'
       preLoaderRoute: typeof AuthenticatedAppReportsRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/_authenticated/app/import': {
+      id: '/_authenticated/app/import'
+      path: '/import'
+      fullPath: '/app/import'
+      preLoaderRoute: typeof AuthenticatedAppImportRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
     '/_authenticated/app/classes': {
@@ -296,14 +375,20 @@ const AuthenticatedAppClassesRouteWithChildren =
 
 interface AuthenticatedAppRouteChildren {
   AuthenticatedAppClassesRoute: typeof AuthenticatedAppClassesRouteWithChildren
+  AuthenticatedAppImportRoute: typeof AuthenticatedAppImportRoute
   AuthenticatedAppReportsRoute: typeof AuthenticatedAppReportsRoute
+  AuthenticatedAppSettingsRoute: typeof AuthenticatedAppSettingsRoute
+  AuthenticatedAppStudentsRoute: typeof AuthenticatedAppStudentsRoute
   AuthenticatedAppTeachersRoute: typeof AuthenticatedAppTeachersRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
 }
 
 const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppClassesRoute: AuthenticatedAppClassesRouteWithChildren,
+  AuthenticatedAppImportRoute: AuthenticatedAppImportRoute,
   AuthenticatedAppReportsRoute: AuthenticatedAppReportsRoute,
+  AuthenticatedAppSettingsRoute: AuthenticatedAppSettingsRoute,
+  AuthenticatedAppStudentsRoute: AuthenticatedAppStudentsRoute,
   AuthenticatedAppTeachersRoute: AuthenticatedAppTeachersRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
 }
@@ -328,6 +413,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   DemoRoute: DemoRoute,
   KioskTokenRoute: KioskTokenRoute,
+  LookupQrTokenRoute: LookupQrTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getClass } from "@/lib/classes.functions";
+import { getSettings } from "@/lib/settings.functions";
 import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer } from "lucide-react";
@@ -13,10 +14,17 @@ export const Route = createFileRoute("/_authenticated/app/classes/$classId/qr")(
 function QrSheetPage() {
   const { classId } = Route.useParams();
   const fGetClass = useServerFn(getClass);
+  const fSettings = useServerFn(getSettings);
   const [cls, setCls] = useState<{ name: string; grade: string | null } | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [schoolName, setSchoolName] = useState<string | null>(null);
   const [cards, setCards] = useState<Array<{ id: string; name: string; ext: string | null; qrSvg: string }>>([]);
 
   useEffect(() => {
+    fSettings({}).then((s) => {
+      setLogoUrl(s?.logo_url ?? null);
+      setSchoolName(s?.school_name ?? null);
+    });
     fGetClass({ data: { classId } }).then(async ({ cls, students }) => {
       setCls(cls);
       const results = await Promise.all(
@@ -29,7 +37,7 @@ function QrSheetPage() {
       );
       setCards(results);
     });
-  }, [classId, fGetClass]);
+  }, [classId, fGetClass, fSettings]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -42,19 +50,38 @@ function QrSheetPage() {
         </Button>
       </div>
       <div className="p-6 max-w-5xl mx-auto">
-        <h1 className="text-2xl font-bold mb-1">{cls?.name}</h1>
-        <p className="text-sm text-muted-foreground mb-6">Attendance QR cards — distribute one per student.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="flex items-center gap-3 mb-1">
+          {logoUrl && <img src={logoUrl} alt="" className="h-10 w-10 object-contain" />}
+          <div>
+            {schoolName && <div className="text-xs text-muted-foreground">{schoolName}</div>}
+            <h1 className="text-2xl font-bold">{cls?.name}</h1>
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground mb-6 print:hidden">
+          Attendance QR cards — one per student. Cut along the dashed lines.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {cards.map((c) => (
-            <div key={c.id} className="rounded-lg border p-4 flex flex-col items-center text-center break-inside-avoid">
-              <div dangerouslySetInnerHTML={{ __html: c.qrSvg }} />
-              <div className="mt-3 font-semibold">{c.name}</div>
-              {c.ext && <div className="text-xs text-muted-foreground">ID {c.ext}</div>}
-              <div className="text-[10px] text-muted-foreground mt-1">{cls?.name}</div>
+            <div
+              key={c.id}
+              className="rounded-lg border border-dashed p-3 flex flex-col items-center text-center break-inside-avoid"
+            >
+              {logoUrl && <img src={logoUrl} alt="" className="h-6 mb-1 object-contain" />}
+              <div className="text-[10px] uppercase text-muted-foreground mb-1">{schoolName ?? "RollCall"}</div>
+              <div dangerouslySetInnerHTML={{ __html: c.qrSvg }} className="[&_svg]:w-full [&_svg]:max-w-[140px]" />
+              <div className="mt-2 font-semibold text-sm leading-tight">{c.name}</div>
+              {c.ext && <div className="text-[10px] text-muted-foreground">ID {c.ext}</div>}
+              <div className="text-[10px] text-muted-foreground mt-0.5">{cls?.name}</div>
             </div>
           ))}
         </div>
       </div>
+      <style>{`
+        @media print {
+          @page { size: A4; margin: 12mm; }
+          .print\\:hidden { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 }
