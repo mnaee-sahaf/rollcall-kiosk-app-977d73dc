@@ -15,16 +15,19 @@ import {
   bulkMarkAllPresent,
   getStudentHistory,
   exportClassAttendance,
+  setStudentNote,
 } from "@/lib/attendance.functions";
 import {
   createKioskSession,
   listKioskSessions,
   revokeKioskSession,
 } from "@/lib/kiosk.functions";
+import { getMyContext, listTeachers } from "@/lib/auth.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
 
 import {
   Sheet,
