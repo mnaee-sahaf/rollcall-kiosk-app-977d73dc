@@ -96,8 +96,17 @@ function AuthPage() {
           <Logo />
         </div>
         <h1 className="text-2xl font-bold text-center">
-          {mode === "signin" ? "Sign in" : invite ? "Accept teacher invite" : "Create account"}
+          {mode === "signin"
+            ? "Sign in"
+            : invite
+              ? "Accept teacher invite"
+              : "Create your organization"}
         </h1>
+        {mode === "signup" && !invite && (
+          <p className="mt-2 text-center text-sm text-muted-foreground">
+            Set up a new RollCall org for your school. You'll be the admin.
+          </p>
+        )}
         {invite && (
           <p className="mt-2 text-center text-sm text-muted-foreground">
             You're joining as a teacher.
@@ -117,6 +126,23 @@ function AuthPage() {
           </div>
         )}
 
+        {mode === "signin" && !invite && (
+          <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4">
+            <div className="text-sm font-semibold">New to RollCall?</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Spin up a new organization for your school in under a minute.
+            </p>
+            <Button
+              type="button"
+              variant="default"
+              className="w-full mt-3"
+              onClick={() => setMode("signup")}
+            >
+              Create new organization
+            </Button>
+          </div>
+        )}
+
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {mode === "signup" && (
@@ -127,8 +153,14 @@ function AuthPage() {
               </div>
               {!invite && (
                 <div>
-                  <Label htmlFor="school">School name</Label>
-                  <Input id="school" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} />
+                  <Label htmlFor="school">Organization / school name</Label>
+                  <Input
+                    id="school"
+                    value={schoolName}
+                    onChange={(e) => setSchoolName(e.target.value)}
+                    placeholder="Lincoln High School"
+                    required
+                  />
                 </div>
               )}
             </>
@@ -149,7 +181,13 @@ function AuthPage() {
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
+            {loading
+              ? "Please wait…"
+              : mode === "signin"
+                ? "Sign in"
+                : invite
+                  ? "Accept invite"
+                  : "Create organization"}
           </Button>
         </form>
 
@@ -163,20 +201,21 @@ function AuthPage() {
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {mode === "signin" ? (
             <>
-              No account?{" "}
-              <button className="text-primary underline" onClick={() => setMode("signup")}>
-                Create one
+              Have an account on another org?{" "}
+              <button className="text-primary underline" onClick={() => setMode("signup")} type="button">
+                Create a different one
               </button>
             </>
           ) : (
             <>
               Already have one?{" "}
-              <button className="text-primary underline" onClick={() => setMode("signin")}>
+              <button className="text-primary underline" onClick={() => setMode("signin")} type="button">
                 Sign in
               </button>
             </>
           )}
         </p>
+
       </div>
     </div>
   );
