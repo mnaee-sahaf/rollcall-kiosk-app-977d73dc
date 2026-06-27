@@ -25,16 +25,23 @@ function AuthPage() {
   const [fullName, setFullName] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/app" });
+      if (data.user) setCurrentEmail(data.user.email ?? null);
     });
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     if (invite) setMode("signup");
   }, [invite]);
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setCurrentEmail(null);
+  }
+
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
