@@ -17,7 +17,13 @@ export const listClasses = createServerFn({ method: "GET" })
 export const listClassesWithMeta = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
+    const { data: adminRows } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin");
+    if (!adminRows || adminRows.length === 0) throw new Error("Forbidden: admin only");
     const { data: classes } = await supabase
       .from("classes")
       .select("id, name, grade, teacher_id, created_at")
@@ -40,6 +46,7 @@ export const listClassesWithMeta = createServerFn({ method: "GET" })
       student_count: countMap.get(c.id) ?? 0,
     }));
   });
+
 
 export const createClass = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

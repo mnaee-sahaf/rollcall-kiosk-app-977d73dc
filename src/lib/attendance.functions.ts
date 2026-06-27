@@ -83,6 +83,50 @@ export const markAttendance = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setStudentNote = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        studentId: z.string().uuid(),
+        classId: z.string().uuid(),
+        day: z.string().optional(),
+        note: z.string().max(500).nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const day = data.day ?? new Date().toISOString().slice(0, 10);
+    const { data: existing } = await supabase
+      .from("attendance_events")
+      .select("id")
+      .eq("student_id", data.studentId)
+      .eq("day", day)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase
+        .from("attendance_events")
+        .update({ note: data.note, marked_by: userId })
+        .eq("id", existing.id);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+    // No event yet: create an 'absent' row carrying the note so it persists.
+    const { error } = await supabase.from("attendance_events").insert({
+      student_id: data.studentId,
+      class_id: data.classId,
+      day,
+      status: "absent",
+      method: "manual",
+      marked_by: userId,
+      note: data.note,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+
 export const bulkMarkAllPresent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>

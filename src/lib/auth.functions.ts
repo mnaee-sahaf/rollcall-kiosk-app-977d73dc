@@ -84,3 +84,32 @@ export const listInvites = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return data;
   });
+
+export const acceptInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ token: z.string().min(10) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { userId, claims } = context;
+    const email = (claims.email as string | undefined)?.toLowerCase();
+    if (!email) throw new Error("No email on session");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: inv } = await supabaseAdmin
+      .from("teacher_invites")
+      .select("*")
+      .eq("token", data.token)
+      .maybeSingle();
+    if (!inv) throw new Error("Invite not found");
+    if (inv.accepted_at) throw new Error("Invite already accepted");
+    if (new Date(inv.expires_at).getTime() < Date.now()) throw new Error("Invite expired");
+    if (inv.email.toLowerCase() !== email)
+      throw new Error(`Invite is for ${inv.email}, you're signed in as ${email}`);
+    await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: userId, role: "teacher" })
+      .select();
+    await supabaseAdmin
+      .from("teacher_invites")
+      .update({ accepted_at: new Date().toISOString() })
+      .eq("id", inv.id);
+    return { ok: true };
+  });
