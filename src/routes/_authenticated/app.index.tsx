@@ -1,36 +1,55 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getMyContext } from "@/lib/auth.functions";
 import { listClasses } from "@/lib/classes.functions";
 import { Card } from "@/components/ui/card";
 import { GraduationCap, BarChart3, Users, QrCode } from "lucide-react";
+import { SetupChecklistCard } from "@/components/app/SetupChecklistCard";
 
 export const Route = createFileRoute("/_authenticated/app/")({
   component: DashboardPage,
 });
 
+type Ctx = Awaited<ReturnType<typeof getMyContext>>;
+
 function DashboardPage() {
+  const navigate = useNavigate();
   const fetchCtx = useServerFn(getMyContext);
   const fetchClasses = useServerFn(listClasses);
-  const [ctx, setCtx] = useState<{ isAdmin: boolean; email?: string } | null>(null);
+  const [ctx, setCtx] = useState<Ctx | null>(null);
   const [classes, setClasses] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
-    fetchCtx({}).then((c) => setCtx({ isAdmin: c.isAdmin, email: c.email }));
+    fetchCtx({}).then((c) => {
+      if (c.needsOnboarding) {
+        navigate({ to: "/app/onboarding", search: { step: 1 }, replace: true });
+        return;
+      }
+      setCtx(c);
+    });
     fetchClasses({}).then(setClasses);
-  }, [fetchCtx, fetchClasses]);
+  }, [fetchCtx, fetchClasses, navigate]);
+
+  if (!ctx) return null;
+
+  const progress = ctx.setupProgress;
+  const setupIncomplete =
+    ctx.isAdmin &&
+    (!progress.hasSchoolName || !progress.hasClasses || !progress.hasStudents);
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">
-          {ctx?.isAdmin ? "Admin dashboard" : "Welcome back"}
+          {ctx.isAdmin ? "Admin dashboard" : "Welcome back"}
         </h1>
         <p className="text-muted-foreground mt-1">
-          {ctx?.email ? <span className="text-sm">{ctx.email}</span> : null}
+          {ctx.email ? <span className="text-sm">{ctx.email}</span> : null}
         </p>
       </div>
+
+      {setupIncomplete && <SetupChecklistCard progress={progress} />}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card className="p-5">
@@ -55,7 +74,7 @@ function DashboardPage() {
             </div>
           </Link>
         </Card>
-        {ctx?.isAdmin && (
+        {ctx.isAdmin && (
           <Card className="p-5">
             <Link to="/app/teachers" className="flex items-center gap-3">
               <div className="rounded-lg bg-primary/10 p-2 text-primary">

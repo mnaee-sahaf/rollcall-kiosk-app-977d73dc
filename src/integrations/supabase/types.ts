@@ -170,6 +170,7 @@ export type Database = {
           day_cutoff_time: string
           id: string
           logo_url: string | null
+          onboarded_at: string | null
           school_name: string | null
           singleton: boolean
           timezone: string
@@ -181,6 +182,7 @@ export type Database = {
           day_cutoff_time?: string
           id?: string
           logo_url?: string | null
+          onboarded_at?: string | null
           school_name?: string | null
           singleton?: boolean
           timezone?: string
@@ -192,6 +194,7 @@ export type Database = {
           day_cutoff_time?: string
           id?: string
           logo_url?: string | null
+          onboarded_at?: string | null
           school_name?: string | null
           singleton?: boolean
           timezone?: string
