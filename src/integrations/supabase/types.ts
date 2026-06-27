@@ -301,15 +301,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      lookup_student_by_qr: {
-        Args: { _qr_token: string }
-        Returns: {
-          class_name: string
-          external_id: string
-          grade: string
-          student_name: string
-        }[]
-      }
     }
     Enums: {
       app_role: "admin" | "teacher"
