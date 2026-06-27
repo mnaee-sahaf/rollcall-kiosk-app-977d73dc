@@ -60,13 +60,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "attendance_events_class_id_fkey"
-            columns: ["class_id"]
-            isOneToOne: false
-            referencedRelation: "student_lookup"
-            referencedColumns: ["class_id"]
-          },
-          {
             foreignKeyName: "attendance_events_kiosk_session_id_fkey"
             columns: ["kiosk_session_id"]
             isOneToOne: false
@@ -144,13 +137,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "classes"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "kiosk_sessions_class_id_fkey"
-            columns: ["class_id"]
-            isOneToOne: false
-            referencedRelation: "student_lookup"
-            referencedColumns: ["class_id"]
           },
         ]
       }
@@ -250,13 +236,6 @@ export type Database = {
             referencedRelation: "classes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "students_class_id_fkey"
-            columns: ["class_id"]
-            isOneToOne: false
-            referencedRelation: "student_lookup"
-            referencedColumns: ["class_id"]
-          },
         ]
       }
       teacher_invites: {
@@ -312,17 +291,7 @@ export type Database = {
       }
     }
     Views: {
-      student_lookup: {
-        Row: {
-          class_id: string | null
-          class_name: string | null
-          external_id: string | null
-          grade: string | null
-          qr_token: string | null
-          student_name: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       has_role: {
@@ -331,6 +300,15 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      lookup_student_by_qr: {
+        Args: { _qr_token: string }
+        Returns: {
+          class_name: string
+          external_id: string
+          grade: string
+          student_name: string
+        }[]
       }
     }
     Enums: {
