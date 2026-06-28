@@ -50,6 +50,9 @@ import {
   StickyNote,
   Settings2,
 } from "lucide-react";
+import { QrHistoryDrawer } from "@/components/students/QrHistoryDrawer";
+import { StickerSheetDialog } from "@/components/students/StickerSheetDialog";
+
 
 export const Route = createFileRoute("/_authenticated/app/classes/$classId")({
   component: ClassDetailPage,
