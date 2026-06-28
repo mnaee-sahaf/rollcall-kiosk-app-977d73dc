@@ -142,9 +142,13 @@ function CreateOrgWizard() {
     setDevices((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
   }
 
-  const step1Valid = schoolName.trim().length >= 2;
-  const step2Valid = devices.length > 0;
-  const step3Valid = referralSource.length > 0;
+  const step1Valid =
+    schoolName.trim().length >= 2 &&
+    country.trim().length > 0 &&
+    phone.trim().length > 0 &&
+    industry.trim().length > 0 &&
+    orgSize.trim().length > 0 &&
+    role.trim().length > 0;
 
   async function handleSubmit() {
     setSubmitting(true);
