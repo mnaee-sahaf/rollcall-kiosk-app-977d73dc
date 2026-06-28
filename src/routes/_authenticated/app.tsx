@@ -40,6 +40,9 @@ function AppLayout() {
     };
   }, [fetchCtx, navigate]);
 
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isFullscreen = pathname.startsWith("/app/onboarding");
+
   if (state.loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
@@ -72,8 +75,6 @@ function AppLayout() {
       </div>
     );
   }
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isFullscreen = pathname.startsWith("/app/onboarding");
   if (isFullscreen) {
     return <Outlet />;
   }
