@@ -107,11 +107,11 @@ function AuthPage() {
             ? "Sign in"
             : invite
               ? "Accept teacher invite"
-              : "Create your organization"}
+              : "Create your account"}
         </h1>
         {mode === "signup" && !invite && (
           <p className="mt-2 text-center text-sm text-muted-foreground">
-            Set up a new RollCall org for your school. You'll be the admin.
+            One quick account, then choose whether to start a new organization or join one.
           </p>
         )}
         {invite && (
@@ -133,44 +133,12 @@ function AuthPage() {
           </div>
         )}
 
-        {mode === "signin" && !invite && (
-          <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4">
-            <div className="text-sm font-semibold">New to RollCall?</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Spin up a new organization for your school in under a minute.
-            </p>
-            <Button
-              type="button"
-              variant="default"
-              className="w-full mt-3"
-              onClick={() => navigate({ to: "/create-organization" })}
-            >
-              Create new organization
-            </Button>
-          </div>
-        )}
-
-
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {mode === "signup" && (
-            <>
-              <div>
-                <Label htmlFor="name">Full name</Label>
-                <Input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-              </div>
-              {!invite && (
-                <div>
-                  <Label htmlFor="school">Organization / school name</Label>
-                  <Input
-                    id="school"
-                    value={schoolName}
-                    onChange={(e) => setSchoolName(e.target.value)}
-                    placeholder="Lincoln High School"
-                    required
-                  />
-                </div>
-              )}
-            </>
+            <div>
+              <Label htmlFor="name">Full name</Label>
+              <Input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+            </div>
           )}
           <div>
             <Label htmlFor="email">Email</Label>
