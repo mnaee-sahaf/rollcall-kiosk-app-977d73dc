@@ -65,17 +65,18 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/app`,
+            emailRedirectTo: `${window.location.origin}/welcome`,
             data: {
               full_name: fullName,
-              school_name: schoolName,
               invite_token: invite,
             },
           },
         });
         if (error) throw error;
         toast.success("Account created");
-        navigate({ to: "/app" });
+        // Invited teachers get a role from the trigger and can go straight to /app.
+        // Everyone else picks Create vs Join on /welcome.
+        navigate({ to: invite ? "/app" : "/welcome" });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
