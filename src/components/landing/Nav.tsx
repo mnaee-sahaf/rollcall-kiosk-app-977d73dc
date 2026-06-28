@@ -23,7 +23,7 @@ export function Nav() {
             <Link to="/demo">Try the demo</Link>
           </Button>
           <Button asChild size="sm">
-            <Link to="/create-organization">Create organization</Link>
+            <Link to="/auth" search={{ mode: "signup", invite: undefined }}>Create organization</Link>
           </Button>
         </div>
       </div>
