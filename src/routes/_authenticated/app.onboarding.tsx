@@ -2,7 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getMyContext, completeOnboarding, inviteTeacher, listTeachers } from "@/lib/auth.functions";
+import {
+  getMyContext,
+  completeOnboarding,
+  inviteTeacher,
+  listTeachers,
+} from "@/lib/auth.functions";
 import { getSettings, updateSettings } from "@/lib/settings.functions";
 import { createClass, listClasses, bulkAddStudents } from "@/lib/classes.functions";
 import { createKioskSession } from "@/lib/kiosk.functions";
@@ -12,14 +17,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Check,
-  Building2,
   Users,
   GraduationCap,
   UserPlus,
-  Rocket,
   Upload,
   Copy,
   Plus,
@@ -28,23 +46,78 @@ import {
   Printer,
   MonitorSmartphone,
   ArrowRight,
+  Clock,
+  Info,
+  X,
+  ChevronRight,
+  Settings as SettingsIcon,
+  Mail,
+  HelpCircle,
+  AlertCircle,
 } from "lucide-react";
 import { Logo } from "@/components/landing/Logo";
+import { getCountryFlag } from "@/lib/countryFlags";
 
-const searchSchema = z.object({ step: z.number().int().min(1).max(5).optional() });
+const searchSchema = z.object({ step: z.number().int().min(1).max(4).optional() });
 
 export const Route = createFileRoute("/_authenticated/app/onboarding")({
   validateSearch: searchSchema,
   component: OnboardingPage,
 });
 
-type StepKey = 1 | 2 | 3 | 4 | 5;
-const STEPS: Array<{ id: StepKey; label: string; icon: typeof Building2 }> = [
-  { id: 1, label: "School profile", icon: Building2 },
-  { id: 2, label: "Invite teachers", icon: Users },
-  { id: 3, label: "Create a class", icon: GraduationCap },
-  { id: 4, label: "Add students", icon: UserPlus },
-  { id: 5, label: "Try it out", icon: Rocket },
+type StepKey = 1 | 2 | 3 | 4;
+type StepDef = {
+  id: StepKey;
+  label: string;
+  minutes: number;
+  icon: typeof SettingsIcon;
+};
+const STEPS: StepDef[] = [
+  { id: 1, label: "Attendance settings", minutes: 2, icon: SettingsIcon },
+  { id: 2, label: "Invite teachers", minutes: 5, icon: Users },
+  { id: 3, label: "Create a class", minutes: 3, icon: GraduationCap },
+  { id: 4, label: "Add students & try it", minutes: 5, icon: UserPlus },
+];
+
+// Common IANA timezones for the selector
+const TIMEZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Toronto",
+  "America/Mexico_City",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Dublin",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Madrid",
+  "Europe/Rome",
+  "Europe/Amsterdam",
+  "Europe/Stockholm",
+  "Europe/Warsaw",
+  "Europe/Athens",
+  "Europe/Moscow",
+  "Africa/Cairo",
+  "Africa/Johannesburg",
+  "Africa/Lagos",
+  "Africa/Nairobi",
+  "Asia/Dubai",
+  "Asia/Karachi",
+  "Asia/Kolkata",
+  "Asia/Dhaka",
+  "Asia/Bangkok",
+  "Asia/Singapore",
+  "Asia/Hong_Kong",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Asia/Seoul",
+  "Asia/Manila",
+  "Australia/Perth",
+  "Australia/Sydney",
+  "Pacific/Auckland",
 ];
 
 function OnboardingPage() {
@@ -56,33 +129,58 @@ function OnboardingPage() {
   const fComplete = useServerFn(completeOnboarding);
   const [checking, setChecking] = useState(true);
   const [classId, setClassId] = useState<string | null>(null);
+  const [progress, setProgress] = useState({
+    hasSchoolName: false,
+    hasTeachers: false,
+    hasClasses: false,
+    hasStudents: false,
+  });
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [step1Saved, setStep1Saved] = useState(false);
+  const [step2Skipped, setStep2Skipped] = useState(false);
+
+  async function refreshProgress() {
+    const c = await fCtx({});
+    setProgress({
+      hasSchoolName: c.setupProgress.hasSchoolName,
+      hasTeachers: c.setupProgress.hasTeachers,
+      hasClasses: c.setupProgress.hasClasses,
+      hasStudents: c.setupProgress.hasStudents,
+    });
+    return c;
+  }
 
   useEffect(() => {
-    fCtx({}).then((c) => {
-      if (!c.isAdmin) {
-        navigate({ to: "/app", replace: true });
-        return;
-      }
-      setChecking(false);
-    });
-  }, [fCtx, navigate]);
+    refreshProgress()
+      .then((c) => {
+        if (!c.isAdmin) {
+          navigate({ to: "/app", replace: true });
+          return;
+        }
+        setChecking(false);
+      })
+      .catch(() => setChecking(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const goto = (s: StepKey) => navigate({ to: "/app/onboarding", search: { step: s }, replace: true });
+  const completed = useMemo(() => {
+    return {
+      1: step1Saved,
+      2: progress.hasTeachers || step2Skipped,
+      3: progress.hasClasses,
+      4: progress.hasStudents,
+    } as Record<StepKey, boolean>;
+  }, [step1Saved, step2Skipped, progress]);
 
-  async function skipAll() {
-    try {
-      await fComplete({});
-      toast.success("You can finish setup anytime from the dashboard.");
-      navigate({ to: "/app" });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    }
-  }
+  const completedCount = (Object.values(completed) as boolean[]).filter(Boolean).length;
+  const pct = Math.round((completedCount / STEPS.length) * 100);
+
+  const goto = (s: StepKey) =>
+    navigate({ to: "/app/onboarding", search: { step: s }, replace: true });
 
   async function finish() {
     try {
       await fComplete({});
-      toast.success("You're all set!");
       navigate({ to: "/app" });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -98,111 +196,324 @@ function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fcfbf8] flex">
-      <aside className="hidden md:flex w-72 flex-col border-r bg-white px-6 py-8">
-        <Logo />
-        <div className="mt-10 mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-          Get started
-        </div>
-        <ol className="space-y-1">
-          {STEPS.map((s) => {
-            const done = s.id < step;
-            const active = s.id === step;
-            const Icon = s.icon;
-            return (
-              <li key={s.id}>
-                <button
-                  onClick={() => goto(s.id)}
-                  className={`w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-left transition ${
-                    active
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : done
-                        ? "text-foreground hover:bg-muted"
-                        : "text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  <span
-                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                      done
-                        ? "bg-primary text-primary-foreground"
-                        : active
-                          ? "bg-primary/20 text-primary"
-                          : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {done ? <Check className="h-3.5 w-3.5" /> : s.id}
-                  </span>
-                  <Icon className="h-4 w-4" />
-                  {s.label}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-        <div className="mt-auto pt-6">
-          <button onClick={skipAll} className="text-xs text-muted-foreground hover:underline">
-            Skip setup for now
-          </button>
-        </div>
-      </aside>
-
-      <main className="flex-1 min-w-0 px-6 py-10 md:px-12 md:py-14">
-        <div className="md:hidden mb-6 flex items-center justify-between">
-          <Logo />
-          <button onClick={skipAll} className="text-xs text-muted-foreground hover:underline">
-            Skip
-          </button>
-        </div>
-        <div className="max-w-2xl mx-auto">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-            Step {step} of 5
+    <div className="min-h-screen bg-[#f6f7f9] flex flex-col">
+      {/* Top bar */}
+      <header className="sticky top-0 z-40 bg-white border-b">
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <Logo />
+            <span className="hidden sm:inline text-base font-semibold text-foreground/80">
+              Onboarding
+            </span>
           </div>
-          {step === 1 && <StepSchool onNext={() => goto(2)} />}
-          {step === 2 && <StepTeachers onNext={() => goto(3)} onBack={() => goto(1)} />}
-          {step === 3 && (
-            <StepClass
-              onCreated={(id) => setClassId(id)}
-              classId={classId}
-              onNext={() => goto(4)}
-              onBack={() => goto(2)}
-            />
-          )}
-          {step === 4 && (
-            <StepStudents
-              classId={classId}
-              onNext={() => goto(5)}
-              onBack={() => goto(3)}
-              onPickClass={setClassId}
-            />
-          )}
-          {step === 5 && (
-            <StepTry classId={classId} onFinish={finish} onBack={() => goto(4)} />
-          )}
+          <button
+            onClick={() => setConfirmClose(true)}
+            className="p-2 rounded-md hover:bg-muted text-muted-foreground"
+            aria-label="Close onboarding"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-      </main>
+      </header>
+
+      {/* Body */}
+      <div className="flex-1 px-4 md:px-8 py-8">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-[320px_1fr] gap-6">
+          {/* Left rail */}
+          <aside className="md:sticky md:top-24 self-start">
+            <Card className="p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold leading-tight">
+                    Complete setting up your organization
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {completedCount} of {STEPS.length} steps completed
+                  </p>
+                </div>
+                <ProgressRing pct={pct} />
+              </div>
+
+              <ol className="mt-6 space-y-1">
+                {STEPS.map((s) => (
+                  <StepRow
+                    key={s.id}
+                    step={s}
+                    active={s.id === step}
+                    done={completed[s.id]}
+                    onClick={() => goto(s.id)}
+                  />
+                ))}
+              </ol>
+
+              <div className="mt-6 pt-4 border-t">
+                <a
+                  href="mailto:support@rollcall.app"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                >
+                  <HelpCircle className="h-4 w-4" /> Need help?
+                </a>
+              </div>
+            </Card>
+          </aside>
+
+          {/* Right panel */}
+          <main className="min-w-0">
+            {step === 1 && (
+              <StepSchool
+                onDone={async () => {
+                  setStep1Saved(true);
+                  await refreshProgress();
+                  goto(2);
+                }}
+              />
+            )}
+            {step === 2 && (
+              <StepTeachers
+                onContinue={async (skipped) => {
+                  if (skipped) setStep2Skipped(true);
+                  await refreshProgress();
+                  goto(3);
+                }}
+                onBack={() => goto(1)}
+              />
+            )}
+            {step === 3 && (
+              <StepClass
+                classId={classId}
+                onCreated={(id) => setClassId(id)}
+                onContinue={async () => {
+                  await refreshProgress();
+                  goto(4);
+                }}
+                onBack={() => goto(2)}
+              />
+            )}
+            {step === 4 && (
+              <StepStudentsAndTry
+                classId={classId}
+                onPickClass={setClassId}
+                onBack={() => goto(3)}
+                onFinish={async () => {
+                  await refreshProgress();
+                  await finish();
+                }}
+              />
+            )}
+          </main>
+        </div>
+      </div>
+
+      <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Leave onboarding?</DialogTitle>
+            <DialogDescription>
+              You can come back any time from the dashboard. Anything you've already saved is
+              kept.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmClose(false)}>
+              Stay here
+            </Button>
+            <Button
+              onClick={async () => {
+                setConfirmClose(false);
+                navigate({ to: "/app" });
+              }}
+            >
+              Leave for now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-/* ---------- Step 1: School ---------- */
-function StepSchool({ onNext }: { onNext: () => void }) {
+/* ---------- Presentational helpers ---------- */
+
+function ProgressRing({ pct }: { pct: number }) {
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+  return (
+    <div className="relative h-16 w-16 shrink-0">
+      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
+        <circle cx="32" cy="32" r={r} stroke="hsl(var(--muted))" strokeWidth="6" fill="none" />
+        <circle
+          cx="32"
+          cy="32"
+          r={r}
+          stroke="hsl(var(--primary))"
+          strokeWidth="6"
+          fill="none"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="transition-[stroke-dashoffset] duration-500"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center text-sm font-bold">
+        {pct}%
+      </div>
+    </div>
+  );
+}
+
+function StepRow({
+  step,
+  active,
+  done,
+  onClick,
+}: {
+  step: StepDef;
+  active: boolean;
+  done: boolean;
+  onClick: () => void;
+}) {
+  const Icon = step.icon;
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className={`relative w-full flex items-center gap-3 rounded-lg border px-3 py-3 text-left transition ${
+          active
+            ? "border-primary/30 bg-primary/5"
+            : "border-transparent hover:bg-muted/60"
+        }`}
+      >
+        {active && (
+          <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-primary" />
+        )}
+        <span
+          className={`flex h-9 w-9 items-center justify-center rounded-full shrink-0 ${
+            done
+              ? "bg-primary text-primary-foreground"
+              : active
+                ? "bg-primary/15 text-primary"
+                : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div
+            className={`text-sm leading-tight truncate ${active ? "font-semibold" : "font-medium"}`}
+          >
+            {step.label}
+          </div>
+          <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-0.5">
+            <Clock className="h-3 w-3" /> {step.minutes} min
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+      </button>
+    </li>
+  );
+}
+
+function SectionHeader({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="flex items-center gap-1.5 mb-3">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/80">{title}</h3>
+      {hint && (
+        <span title={hint} className="text-muted-foreground cursor-help">
+          <Info className="h-3.5 w-3.5" />
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StepShell({
+  title,
+  minutes,
+  description,
+  learnMore,
+  children,
+  footer,
+}: {
+  title: string;
+  minutes: number;
+  description: string;
+  learnMore?: { label: string; href: string };
+  children: React.ReactNode;
+  footer: React.ReactNode;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="px-8 py-7 border-b">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold">{title}</h1>
+          <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" /> Takes about {minutes} minutes
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground mt-2">{description}</p>
+        {learnMore && (
+          <a
+            href={learnMore.href}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline mt-3"
+          >
+            {learnMore.label} <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+      </div>
+      <div className="px-8 py-6 space-y-8 bg-white">{children}</div>
+      <div className="px-8 py-4 border-t bg-muted/30 flex justify-between items-center">
+        {footer}
+      </div>
+    </Card>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="text-xs text-destructive mt-1 inline-flex items-center gap-1">
+      <AlertCircle className="h-3 w-3" /> {message}
+    </p>
+  );
+}
+
+/* ---------- Step 1: Attendance settings ---------- */
+
+const step1Schema = z
+  .object({
+    timezone: z.string().min(1, "Timezone is required").max(64),
+    day_cutoff_time: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM"),
+    absent_after_time: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM"),
+  })
+  .refine((v) => v.absent_after_time > v.day_cutoff_time, {
+    path: ["absent_after_time"],
+    message: "Must be later than 'Late after'",
+  });
+
+function StepSchool({ onDone }: { onDone: () => void }) {
   const fGet = useServerFn(getSettings);
   const fUpdate = useServerFn(updateSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [name, setName] = useState("");
+  const [orgName, setOrgName] = useState<string>("");
+  const [country, setCountry] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [cutoff, setCutoff] = useState("09:00");
   const [absentAfter, setAbsentAfter] = useState("10:30");
   const [tz, setTz] = useState(
     typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC",
   );
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fGet({}).then((s) => {
       if (s) {
-        setName(s.school_name ?? "");
+        setOrgName(s.school_name ?? "");
+        setCountry((s as { country?: string | null }).country ?? "");
         setLogoUrl(s.logo_url ?? null);
         setCutoff((s.day_cutoff_time ?? "09:00").slice(0, 5));
         setAbsentAfter((s.absent_after_time ?? "10:30").slice(0, 5));
@@ -215,6 +526,14 @@ function StepSchool({ onNext }: { onNext: () => void }) {
   async function handleLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be 2MB or smaller");
+      return;
+    }
     setUploading(true);
     try {
       const ext = file.name.split(".").pop() ?? "png";
@@ -235,22 +554,31 @@ function StepSchool({ onNext }: { onNext: () => void }) {
   }
 
   async function save() {
-    if (!name.trim()) {
-      toast.error("School name is required");
+    const parsed = step1Schema.safeParse({
+      timezone: tz,
+      day_cutoff_time: cutoff,
+      absent_after_time: absentAfter,
+    });
+    if (!parsed.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        errs[issue.path.join(".")] = issue.message;
+      }
+      setErrors(errs);
       return;
     }
+    setErrors({});
     setSaving(true);
     try {
       await fUpdate({
         data: {
-          school_name: name.trim(),
           logo_url: logoUrl,
           day_cutoff_time: cutoff,
           absent_after_time: absentAfter,
           timezone: tz,
         },
       });
-      onNext();
+      onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
     } finally {
@@ -258,81 +586,155 @@ function StepSchool({ onNext }: { onNext: () => void }) {
     }
   }
 
-  if (loading) return <div className="text-muted-foreground">Loading…</div>;
+  if (loading) {
+    return (
+      <Card className="p-10 text-muted-foreground text-center">Loading settings…</Card>
+    );
+  }
+
+  const flag = country ? getCountryFlag(country) : "";
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold">Tell us about your school</h1>
-      <p className="text-muted-foreground mt-1">
-        This appears on kiosks, printable QR sheets, and reports.
-      </p>
-      <Card className="p-6 mt-6 space-y-5">
-        <div>
-          <Label>School name *</Label>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Lincoln High School"
-          />
-        </div>
-        <div>
-          <Label>Logo</Label>
-          <div className="flex items-center gap-4 mt-1">
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="logo"
-                className="h-16 w-16 rounded border object-contain bg-white"
-              />
-            ) : (
-              <div className="h-16 w-16 rounded border bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                No logo
-              </div>
-            )}
-            <label className="inline-flex items-center gap-2 cursor-pointer rounded-md border bg-white px-3 py-2 text-sm hover:bg-muted">
-              <Upload className="h-4 w-4" />
-              {uploading ? "Uploading…" : "Upload"}
-              <input type="file" accept="image/*" hidden onChange={handleLogo} />
-            </label>
+    <StepShell
+      title="Attendance settings"
+      minutes={2}
+      description="Set how RollCall tracks late and absent students, and add a logo for kiosks and printed QR sheets."
+      learnMore={{ label: "Learn how attendance windows work", href: "#" }}
+      footer={
+        <>
+          <span className="text-xs text-muted-foreground">Step 1 of 4</span>
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Continue"}
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </>
+      }
+    >
+      <section>
+        <SectionHeader title="Organization" hint="Edit name, country, and contact details in Settings." />
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+          {flag && <span className="text-2xl leading-none">{flag}</span>}
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold truncate">{orgName || "Your organization"}</div>
+            <div className="text-xs text-muted-foreground">
+              {country || "No country set"} · captured during account creation
+            </div>
           </div>
+          <a
+            href="/app/settings"
+            className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 shrink-0"
+          >
+            Edit in Settings <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
+      </section>
+
+      <section>
+        <SectionHeader title="Logo" hint="Shown on kiosk, printed QR cards, and reports." />
+        <div className="flex items-center gap-4">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt="logo"
+              className="h-16 w-16 rounded-md border object-contain bg-white"
+            />
+          ) : (
+            <div className="h-16 w-16 rounded-md border bg-muted flex items-center justify-center text-xs text-muted-foreground">
+              No logo
+            </div>
+          )}
+          <label className="inline-flex items-center gap-2 cursor-pointer rounded-md border bg-white px-3 py-2 text-sm hover:bg-muted">
+            <Upload className="h-4 w-4" />
+            {uploading ? "Uploading…" : logoUrl ? "Replace logo" : "Upload logo"}
+            <input type="file" accept="image/*" hidden onChange={handleLogo} />
+          </label>
+          <span className="text-xs text-muted-foreground">PNG or JPG, up to 2MB</span>
+        </div>
+      </section>
+
+      <section>
+        <SectionHeader title="Timezone" hint="Used to compute the attendance day and report periods." />
+        <Select value={tz} onValueChange={setTz}>
+          <SelectTrigger className={errors.timezone ? "border-destructive" : ""}>
+            <SelectValue placeholder="Select timezone" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            {TIMEZONES.map((z) => (
+              <SelectItem key={z} value={z}>
+                {z.replace(/_/g, " ")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FieldError message={errors.timezone} />
+      </section>
+
+      <section>
+        <SectionHeader
+          title="Attendance window"
+          hint="Scans before 'Late after' count as present. Between 'Late after' and 'Absent after' count as late. After that, students must be marked absent."
+        />
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <Label>Late after</Label>
-            <Input type="time" value={cutoff} onChange={(e) => setCutoff(e.target.value)} />
+            <Label className="text-sm">Late after</Label>
+            <Input
+              type="time"
+              value={cutoff}
+              onChange={(e) => setCutoff(e.target.value)}
+              className={errors.day_cutoff_time ? "border-destructive" : ""}
+            />
+            <FieldError message={errors.day_cutoff_time} />
+            <p className="text-xs text-muted-foreground mt-1">
+              Scans after this time are marked late.
+            </p>
           </div>
           <div>
-            <Label>Absent after</Label>
+            <Label className="text-sm">Absent after</Label>
             <Input
               type="time"
               value={absentAfter}
               onChange={(e) => setAbsentAfter(e.target.value)}
+              className={errors.absent_after_time ? "border-destructive" : ""}
             />
+            <FieldError message={errors.absent_after_time} />
+            <p className="text-xs text-muted-foreground mt-1">
+              No-shows after this time are auto-flagged absent.
+            </p>
           </div>
         </div>
-        <div>
-          <Label>Timezone</Label>
-          <Input value={tz} onChange={(e) => setTz(e.target.value)} />
-        </div>
-      </Card>
-      <div className="mt-6 flex justify-end">
-        <Button onClick={save} disabled={saving || !name.trim()}>
-          {saving ? "Saving…" : "Continue"}
-          <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
-      </div>
-    </div>
+      </section>
+    </StepShell>
   );
 }
 
 /* ---------- Step 2: Teachers ---------- */
-function StepTeachers({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+
+const emailSchema = z.string().trim().toLowerCase().email("Enter a valid email").max(255);
+
+function StepTeachers({
+  onContinue,
+  onBack,
+}: {
+  onContinue: (skipped: boolean) => void;
+  onBack: () => void;
+}) {
   const fInvite = useServerFn(inviteTeacher);
-  const [rows, setRows] = useState<Array<{ email: string }>>([{ email: "" }]);
+  const fTeachers = useServerFn(listTeachers);
+  const [existing, setExisting] = useState<Array<{ user_id: string; full_name: string | null }>>(
+    [],
+  );
+  const [rows, setRows] = useState<Array<{ email: string; error?: string }>>([{ email: "" }]);
   const [sent, setSent] = useState<Array<{ email: string; link: string }>>([]);
   const [sending, setSending] = useState(false);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  useEffect(() => {
+    fTeachers({})
+      .then(setExisting)
+      .catch(() => {});
+  }, [fTeachers]);
 
   function addRow() {
     setRows((r) => [...r, { email: "" }]);
@@ -342,16 +744,37 @@ function StepTeachers({ onNext, onBack }: { onNext: () => void; onBack: () => vo
   }
 
   async function sendAll() {
-    const valid = rows
-      .map((r) => r.email.trim())
-      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-    if (valid.length === 0) {
-      toast.error("Add at least one valid email");
+    const seen = new Set(sent.map((s) => s.email.toLowerCase()));
+    const next: typeof rows = rows.map((r) => ({ email: r.email }));
+    const toSend: string[] = [];
+    let hasError = false;
+    for (let i = 0; i < next.length; i++) {
+      const raw = next[i].email.trim();
+      if (!raw) continue;
+      const parsed = emailSchema.safeParse(raw);
+      if (!parsed.success) {
+        next[i].error = parsed.error.issues[0]?.message ?? "Invalid email";
+        hasError = true;
+        continue;
+      }
+      const norm = parsed.data;
+      if (seen.has(norm)) {
+        next[i].error = "Already invited this session";
+        hasError = true;
+        continue;
+      }
+      seen.add(norm);
+      toSend.push(norm);
+    }
+    setRows(next);
+    if (hasError) return;
+    if (toSend.length === 0) {
+      toast.error("Add at least one email");
       return;
     }
     setSending(true);
     const out: Array<{ email: string; link: string }> = [];
-    for (const email of valid) {
+    for (const email of toSend) {
       try {
         const { invite } = await fInvite({ data: { email } });
         out.push({ email, link: `${origin}/auth?invite=${invite.token}` });
@@ -362,36 +785,84 @@ function StepTeachers({ onNext, onBack }: { onNext: () => void; onBack: () => vo
     setSent((s) => [...s, ...out]);
     setRows([{ email: "" }]);
     setSending(false);
-    if (out.length) toast.success(`Generated ${out.length} invite link${out.length === 1 ? "" : "s"}`);
+    if (out.length)
+      toast.success(`Generated ${out.length} invite link${out.length === 1 ? "" : "s"}`);
   }
 
-  return (
-    <div>
-      <h1 className="text-3xl font-bold">Invite teachers</h1>
-      <p className="text-muted-foreground mt-1">
-        Send invite links so teachers can sign in and manage their own classes. You can skip and
-        add them later.
-      </p>
+  const inviteCount = sent.length + existing.length;
 
-      <Card className="p-6 mt-6 space-y-3">
-        {rows.map((row, i) => (
-          <div key={i} className="flex gap-2">
-            <Input
-              type="email"
-              placeholder="teacher@school.edu"
-              value={row.email}
-              onChange={(e) =>
-                setRows((rs) => rs.map((r, idx) => (idx === i ? { email: e.target.value } : r)))
-              }
-            />
-            {rows.length > 1 && (
-              <Button variant="ghost" size="icon" onClick={() => removeRow(i)} type="button">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
+  return (
+    <StepShell
+      title="Invite teachers"
+      minutes={5}
+      description="Send invite links so teachers can sign in and run attendance for their own classes. You can always add more later."
+      learnMore={{ label: "Learn about teacher roles", href: "#" }}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onBack}>
+            Back
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => onContinue(true)}>
+              Skip for now
+            </Button>
+            <Button onClick={() => onContinue(false)} disabled={inviteCount === 0}>
+              Continue <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
           </div>
-        ))}
-        <div className="flex justify-between">
+        </>
+      }
+    >
+      {existing.length > 0 && (
+        <section>
+          <SectionHeader title="Already on your team" />
+          <div className="space-y-1.5">
+            {existing.map((t) => (
+              <div
+                key={t.user_id}
+                className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm"
+              >
+                <Check className="h-4 w-4 text-primary" />
+                <span className="font-medium">{t.full_name ?? "Teacher"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <SectionHeader
+          title="Invite by email"
+          hint="We generate a unique invite link per email. Share it however you like."
+        />
+        <div className="space-y-2">
+          {rows.map((row, i) => (
+            <div key={i}>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="teacher@school.edu"
+                  value={row.email}
+                  onChange={(e) =>
+                    setRows((rs) =>
+                      rs.map((r, idx) =>
+                        idx === i ? { email: e.target.value, error: undefined } : r,
+                      ),
+                    )
+                  }
+                  className={row.error ? "border-destructive" : ""}
+                />
+                {rows.length > 1 && (
+                  <Button variant="ghost" size="icon" onClick={() => removeRow(i)} type="button">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <FieldError message={row.error} />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-between mt-3">
           <Button variant="ghost" size="sm" onClick={addRow} type="button">
             <Plus className="h-4 w-4 mr-1" /> Add another
           </Button>
@@ -399,67 +870,82 @@ function StepTeachers({ onNext, onBack }: { onNext: () => void; onBack: () => vo
             {sending ? "Generating…" : "Generate invite links"}
           </Button>
         </div>
-      </Card>
+      </section>
 
       {sent.length > 0 && (
-        <Card className="p-5 mt-4 space-y-2 bg-emerald-50/50 border-emerald-200">
-          <div className="text-sm font-semibold text-emerald-900">
-            Share these links with your teachers
-          </div>
-          {sent.map((s) => (
-            <div key={s.link} className="flex items-center gap-2 text-sm">
-              <span className="font-mono text-xs flex-1 truncate">{s.email}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  navigator.clipboard.writeText(s.link);
-                  toast.success("Copied");
-                }}
+        <section>
+          <SectionHeader title="Share these links" />
+          <div className="space-y-2">
+            {sent.map((s) => (
+              <div
+                key={s.link}
+                className="flex items-center gap-2 rounded-md border bg-emerald-50 border-emerald-200 px-3 py-2 text-sm"
               >
-                <Copy className="h-3 w-3 mr-1" /> Copy link
-              </Button>
-            </div>
-          ))}
-        </Card>
+                <span className="flex-1 truncate font-medium">{s.email}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(s.link);
+                    toast.success("Copied");
+                  }}
+                >
+                  <Copy className="h-3 w-3 mr-1" /> Copy
+                </Button>
+                <a
+                  className="inline-flex items-center gap-1 rounded-md border bg-white px-2.5 py-1.5 text-xs hover:bg-muted"
+                  href={`mailto:${s.email}?subject=${encodeURIComponent(
+                    "Your RollCall invite",
+                  )}&body=${encodeURIComponent(
+                    `You've been invited to RollCall. Accept here: ${s.link}`,
+                  )}`}
+                >
+                  <Mail className="h-3 w-3" /> Email
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
-
-      <div className="mt-6 flex justify-between">
-        <Button variant="ghost" onClick={onBack}>
-          Back
-        </Button>
-        <Button onClick={onNext} variant={sent.length ? "default" : "outline"}>
-          {sent.length ? "Continue" : "Skip for now"}
-          <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
-      </div>
-    </div>
+    </StepShell>
   );
 }
 
 /* ---------- Step 3: Class ---------- */
+
+const classSchema = z.object({
+  name: z.string().trim().min(1, "Class name is required").max(80, "Keep it under 80 characters"),
+  grade: z.string().trim().max(20, "Keep it under 20 characters").optional(),
+  teacherId: z.string().uuid().optional().or(z.literal("")),
+});
+
 function StepClass({
-  onCreated,
   classId,
-  onNext,
+  onCreated,
+  onContinue,
   onBack,
 }: {
-  onCreated: (id: string) => void;
   classId: string | null;
-  onNext: () => void;
+  onCreated: (id: string) => void;
+  onContinue: () => void;
   onBack: () => void;
 }) {
   const fCreate = useServerFn(createClass);
   const fList = useServerFn(listClasses);
   const fTeachers = useServerFn(listTeachers);
   const fCtx = useServerFn(getMyContext);
-  const [classes, setClasses] = useState<Array<{ id: string; name: string; grade: string | null }>>([]);
-  const [teachers, setTeachers] = useState<Array<{ user_id: string; full_name: string | null }>>([]);
+  const [classes, setClasses] = useState<Array<{ id: string; name: string; grade: string | null }>>(
+    [],
+  );
+  const [teachers, setTeachers] = useState<Array<{ user_id: string; full_name: string | null }>>(
+    [],
+  );
   const [me, setMe] = useState<{ userId: string; email?: string } | null>(null);
   const [name, setName] = useState("");
   const [grade, setGrade] = useState("");
-  const [teacherId, setTeacherId] = useState("");
+  const [teacherId, setTeacherId] = useState<string>("__me");
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   function refresh() {
     fList({}).then((rows) =>
@@ -469,28 +955,39 @@ function StepClass({
   useEffect(() => {
     refresh();
     fCtx({}).then((c) => setMe({ userId: c.userId, email: c.email }));
-    fTeachers({}).then(setTeachers).catch(() => {});
+    fTeachers({})
+      .then(setTeachers)
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function create() {
-    if (!name.trim()) {
-      toast.error("Class name required");
+    const tId = teacherId === "__me" ? "" : teacherId;
+    const parsed = classSchema.safeParse({
+      name,
+      grade: grade || undefined,
+      teacherId: tId || undefined,
+    });
+    if (!parsed.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parsed.error.issues) errs[issue.path.join(".")] = issue.message;
+      setErrors(errs);
       return;
     }
+    setErrors({});
     setSaving(true);
     try {
       const row = await fCreate({
         data: {
-          name: name.trim(),
-          grade: grade.trim() || undefined,
-          teacherId: teacherId || undefined,
+          name: parsed.data.name,
+          grade: parsed.data.grade,
+          teacherId: tId || undefined,
         },
       });
       onCreated(row.id);
       setName("");
       setGrade("");
-      setTeacherId("");
+      setTeacherId("__me");
       refresh();
       toast.success("Class created");
     } catch (err) {
@@ -501,46 +998,74 @@ function StepClass({
   }
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold">Create your first class</h1>
-      <p className="text-muted-foreground mt-1">
-        You can add more classes anytime. Pick the teacher who'll manage attendance.
-      </p>
-
-      <Card className="p-6 mt-6 space-y-4">
+    <StepShell
+      title="Create your first class"
+      minutes={3}
+      description="A class groups students together and gets its own kiosk session. You can create more anytime."
+      learnMore={{ label: "Learn about classes & kiosks", href: "#" }}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onBack}>
+            Back
+          </Button>
+          <Button onClick={onContinue} disabled={classes.length === 0}>
+            Continue <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </>
+      }
+    >
+      <section>
+        <SectionHeader title="Class details" />
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <Label>Class name *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="7A" />
+            <Label className="text-sm">
+              Class name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="7A"
+              className={errors.name ? "border-destructive" : ""}
+            />
+            <FieldError message={errors.name} />
           </div>
           <div>
-            <Label>Grade (optional)</Label>
-            <Input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="Grade 7" />
+            <Label className="text-sm">Grade (optional)</Label>
+            <Input
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              placeholder="Grade 7"
+              className={errors.grade ? "border-destructive" : ""}
+            />
+            <FieldError message={errors.grade} />
           </div>
         </div>
-        <div>
-          <Label>Teacher</Label>
-          <select
-            value={teacherId}
-            onChange={(e) => setTeacherId(e.target.value)}
-            className="mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm"
-          >
-            <option value="">Me ({me?.email ?? "admin"})</option>
-            {teachers.map((t) => (
-              <option key={t.user_id} value={t.user_id}>
-                {t.full_name ?? t.user_id.slice(0, 8)}
-              </option>
-            ))}
-          </select>
+        <div className="mt-4">
+          <Label className="text-sm">Assigned teacher</Label>
+          <Select value={teacherId} onValueChange={setTeacherId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__me">Me ({me?.email ?? "admin"})</SelectItem>
+              {teachers.map((t) => (
+                <SelectItem key={t.user_id} value={t.user_id}>
+                  {t.full_name ?? t.user_id.slice(0, 8)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <Button onClick={create} disabled={saving || !name.trim()}>
-          <Plus className="h-4 w-4 mr-1" /> {saving ? "Creating…" : "Create class"}
-        </Button>
-      </Card>
+        <div className="mt-4">
+          <Button onClick={create} disabled={saving}>
+            <Plus className="h-4 w-4 mr-1" /> {saving ? "Creating…" : "Create class"}
+          </Button>
+        </div>
+      </section>
 
       {classes.length > 0 && (
-        <div className="mt-6">
-          <div className="text-sm font-semibold mb-2">Classes so far</div>
+        <section>
+          <SectionHeader title="Your classes" />
           <div className="space-y-2">
             {classes.map((c) => (
               <button
@@ -558,39 +1083,39 @@ function StepClass({
               </button>
             ))}
           </div>
-        </div>
+        </section>
       )}
-
-      <div className="mt-8 flex justify-between">
-        <Button variant="ghost" onClick={onBack}>
-          Back
-        </Button>
-        <Button onClick={onNext} disabled={classes.length === 0}>
-          Continue <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
-      </div>
-    </div>
+    </StepShell>
   );
 }
 
-/* ---------- Step 4: Students ---------- */
-function StepStudents({
+/* ---------- Step 4: Students & try it ---------- */
+
+const studentLineSchema = z.object({
+  full_name: z.string().trim().min(1).max(100),
+  external_id: z.string().trim().max(40).optional(),
+});
+
+function StepStudentsAndTry({
   classId,
-  onNext,
-  onBack,
   onPickClass,
+  onBack,
+  onFinish,
 }: {
   classId: string | null;
-  onNext: () => void;
-  onBack: () => void;
   onPickClass: (id: string) => void;
+  onBack: () => void;
+  onFinish: () => void;
 }) {
   const fBulk = useServerFn(bulkAddStudents);
   const fList = useServerFn(listClasses);
+  const fKiosk = useServerFn(createKioskSession);
   const [classes, setClasses] = useState<Array<{ id: string; name: string }>>([]);
   const [text, setText] = useState("");
   const [count, setCount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [lineError, setLineError] = useState<string>("");
 
   useEffect(() => {
     fList({}).then((rows) => {
@@ -601,15 +1126,19 @@ function StepStudents({
   }, []);
 
   const parsed = useMemo(() => {
-    return text
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [full_name, external_id] = line.split(",").map((s) => s?.trim());
-        return { full_name, external_id: external_id || undefined };
-      })
-      .filter((r) => r.full_name);
+    const out: Array<{ full_name: string; external_id?: string }> = [];
+    const lines = text.split("\n");
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+      const [name, id] = line.split(",").map((s) => s?.trim());
+      const r = studentLineSchema.safeParse({
+        full_name: name,
+        external_id: id || undefined,
+      });
+      if (r.success) out.push(r.data);
+    }
+    return out;
   }, [text]);
 
   async function save() {
@@ -618,9 +1147,14 @@ function StepStudents({
       return;
     }
     if (parsed.length === 0) {
-      toast.error("Add at least one student name");
+      setLineError("Add at least one student name");
       return;
     }
+    if (parsed.length > 200) {
+      setLineError("Add up to 200 students at a time — use CSV import for more");
+      return;
+    }
+    setLineError("");
     setSaving(true);
     try {
       const res = await fBulk({ data: { classId, students: parsed } });
@@ -633,84 +1167,6 @@ function StepStudents({
       setSaving(false);
     }
   }
-
-  return (
-    <div>
-      <h1 className="text-3xl font-bold">Add students</h1>
-      <p className="text-muted-foreground mt-1">
-        One name per line. Optionally add a student ID after a comma. Each gets a unique QR code
-        automatically.
-      </p>
-
-      <Card className="p-6 mt-6 space-y-4">
-        {classes.length > 1 && (
-          <div>
-            <Label>Class</Label>
-            <select
-              value={classId ?? ""}
-              onChange={(e) => onPickClass(e.target.value)}
-              className="mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm"
-            >
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <div>
-          <Label>Students</Label>
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={10}
-            placeholder={"Alice Johnson\nBob Smith, S-1042\nCarol Diaz"}
-            className="font-mono text-sm"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            {parsed.length} to add{count > 0 && ` · ${count} added so far`}
-          </p>
-        </div>
-        <div className="flex justify-between items-center">
-          <a
-            href="/app/import"
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-          >
-            Or use CSV bulk import <ExternalLink className="h-3 w-3" />
-          </a>
-          <Button onClick={save} disabled={saving || parsed.length === 0 || !classId}>
-            {saving ? "Adding…" : `Add ${parsed.length || ""} students`}
-          </Button>
-        </div>
-      </Card>
-
-      <div className="mt-8 flex justify-between">
-        <Button variant="ghost" onClick={onBack}>
-          Back
-        </Button>
-        <Button onClick={onNext} disabled={count === 0}>
-          Continue <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Step 5: Try ---------- */
-function StepTry({
-  classId,
-  onFinish,
-  onBack,
-}: {
-  classId: string | null;
-  onFinish: () => void;
-  onBack: () => void;
-}) {
-  const fKiosk = useServerFn(createKioskSession);
-  const [opening, setOpening] = useState(false);
 
   async function openKiosk() {
     if (!classId) return;
@@ -725,65 +1181,120 @@ function StepTry({
     }
   }
 
+  const canFinish = count > 0;
+
   return (
-    <div>
-      <h1 className="text-3xl font-bold">You're ready to roll</h1>
-      <p className="text-muted-foreground mt-1">
-        Print QR cards for students, then open a kiosk on any phone or laptop with a camera.
-      </p>
-
-      <div className="grid sm:grid-cols-2 gap-4 mt-6">
-        <Card className="p-6 hover:border-primary transition">
-          <Printer className="h-6 w-6 text-primary mb-3" />
-          <h3 className="font-semibold">Print QR sheet</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            A4 grid of QR cards, one per student, with parent self-lookup QR.
-          </p>
-          <Button
-            variant="outline"
-            className="mt-4 w-full"
-            disabled={!classId}
-            onClick={() => classId && window.open(`/app/classes/${classId}/qr`, "_blank")}
-          >
-            Open print sheet <ExternalLink className="h-3 w-3 ml-2" />
+    <StepShell
+      title="Add students & try it out"
+      minutes={5}
+      description="Add your roster, print QR cards, then open a kiosk to see attendance in action."
+      learnMore={{ label: "Learn about QR codes & kiosks", href: "#" }}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onBack}>
+            Back
           </Button>
-        </Card>
-        <Card className="p-6 hover:border-primary transition">
-          <MonitorSmartphone className="h-6 w-6 text-primary mb-3" />
-          <h3 className="font-semibold">Open a kiosk</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Creates a 2-hour kiosk session so students can scan their QR codes.
-          </p>
-          <Button
-            variant="outline"
-            className="mt-4 w-full"
-            disabled={!classId || opening}
-            onClick={openKiosk}
-          >
-            {opening ? "Opening…" : "Launch kiosk"} <ExternalLink className="h-3 w-3 ml-2" />
+          <Button onClick={onFinish} disabled={!canFinish} size="lg">
+            Finish setup <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
-        </Card>
-      </div>
+        </>
+      }
+    >
+      <section>
+        <SectionHeader title="Pick a class" />
+        {classes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No classes yet — go back and create one first.
+          </p>
+        ) : (
+          <Select value={classId ?? ""} onValueChange={onPickClass}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a class" />
+            </SelectTrigger>
+            <SelectContent>
+              {classes.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </section>
 
-      <Card className="p-5 mt-6 bg-primary/5 border-primary/20">
-        <div className="text-sm">
-          <div className="font-semibold mb-1">What's next?</div>
-          <ul className="text-muted-foreground space-y-1 list-disc pl-5">
-            <li>Reports update as soon as scans come in — daily, weekly, monthly.</li>
-            <li>Add more classes and students from the sidebar.</li>
-            <li>Parents can scan the small QR on each card to see their child's history.</li>
-          </ul>
+      <section>
+        <SectionHeader
+          title="Quick add students"
+          hint="One per line. Add a comma + student ID after the name if you have one."
+        />
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={8}
+          placeholder={"Alice Johnson\nBob Smith, S-1042\nCarol Diaz"}
+          className={`font-mono text-sm ${lineError ? "border-destructive" : ""}`}
+        />
+        <FieldError message={lineError} />
+        <div className="flex justify-between items-center mt-2">
+          <p className="text-xs text-muted-foreground">
+            {parsed.length} valid line{parsed.length === 1 ? "" : "s"}
+            {count > 0 && ` · ${count} added so far`}
+          </p>
+          <Button onClick={save} disabled={saving || parsed.length === 0 || !classId}>
+            {saving ? "Adding…" : `Add ${parsed.length || ""} students`}
+          </Button>
         </div>
-      </Card>
+        <a
+          href="/app/import"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-3"
+        >
+          Or use CSV bulk import <ExternalLink className="h-3 w-3" />
+        </a>
+      </section>
 
-      <div className="mt-8 flex justify-between">
-        <Button variant="ghost" onClick={onBack}>
-          Back
-        </Button>
-        <Button onClick={onFinish} size="lg">
-          Go to dashboard <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
-      </div>
-    </div>
+      <section>
+        <SectionHeader title="Try it now" hint="Print QR cards and open a kiosk on any camera-equipped device." />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="rounded-lg border p-5">
+            <Printer className="h-6 w-6 text-primary mb-3" />
+            <h4 className="font-semibold">Print QR sheet</h4>
+            <p className="text-sm text-muted-foreground mt-1">
+              A4 grid, one card per student, with a parent self-lookup QR.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4 w-full"
+              disabled={!classId || count === 0}
+              onClick={() => classId && window.open(`/app/classes/${classId}/qr`, "_blank")}
+            >
+              Open print sheet <ExternalLink className="h-3 w-3 ml-2" />
+            </Button>
+          </div>
+          <div className="rounded-lg border p-5">
+            <MonitorSmartphone className="h-6 w-6 text-primary mb-3" />
+            <h4 className="font-semibold">Open a kiosk</h4>
+            <p className="text-sm text-muted-foreground mt-1">
+              Creates a 2-hour kiosk session so students can scan their QR codes.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4 w-full"
+              disabled={!classId || opening}
+              onClick={openKiosk}
+            >
+              {opening ? "Opening…" : "Launch kiosk"} <ExternalLink className="h-3 w-3 ml-2" />
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {!canFinish && (
+        <p className="text-xs text-muted-foreground">
+          Add at least one student to finish setup.
+        </p>
+      )}
+    </StepShell>
   );
 }
