@@ -1,71 +1,100 @@
 
-## Goal
+# Student QR — distribution, lifecycle & scope
 
-Rework `/app/onboarding` to feel like the reference: focused wizard with persistent progress sidebar, rich per-step content (sections, helper copy, learn-more links, time estimates), inline validation, and **no duplication of anything captured during `/welcome/create`**.
+Confirming the model based on your answers:
+- **One personal QR per student**, tied to their student ID (already in place).
+- **Scope at MVP**: classroom kiosks only. Same QR is reusable later for gate/event/bus scans — we just won't ship those contexts yet.
+- **No anti-spoofing extras** for MVP (kiosk is supervised). We'll still display the student's name + photo on scan so the teacher can eyeball it.
+- **Teacher (and admin) can revoke + reissue** a QR.
 
-## What account creation already captured
+## What we'll build
 
-From `welcome.create.tsx` → `school_settings`: `school_name`, `country`, `phone`, `industry`, `org_size`, `primary_role`, `devices`, `referral_source`. **Onboarding will not ask for any of these again.** Step 1 instead focuses on operational settings the wizard didn't cover.
+### 1. Distribution — four ways to get a QR into a student's hands
 
-## Layout shell
+**A. Printable ID cards (PDF)** — already exists, polish only
+- Single-student print + multi-student batch print (already there)
+- Add a "card style" toggle: full ID card (name, photo, school logo, QR, parent-lookup mini-QR) vs. compact (QR + name only)
 
-- Top bar (white, sticky): RollCall logo + "Onboarding" label; `X` close on the right → confirm dialog, then `skipAll()`.
-- Soft `#f6f7f9` body, two columns:
-  - **Left rail (sticky card)**: "Complete setting up your organization" heading, SVG progress ring with `%`, "N of 4 steps completed", step list (icon badge, label, "~X min", chevron, orange accent on active, check when done), "Need help?" footer link.
-  - **Right content panel (white card)**: step title + "Takes about X minutes" pill, one-line description, orange "Learn more about …" link, body split into uppercase SECTION headers with `i` tooltip, sticky footer with Back / Skip / Continue.
+**B. Bulk sticker sheets (new)**
+- New "Print stickers" action on Students page and class roster
+- Avery-style multi-up layouts: **30-up (Avery 5160)**, **20-up**, **10-up**
+- Choose: whole school / a class / selected students
+- Output: a single paginated PDF via `jspdf` + `jspdf-autotable`
+- Each sticker: QR + student name + class (no photo, to fit)
 
-## Steps (now 4, since account creation owns the org profile)
+**C. Email / SMS to parents (new)**
+- Add `guardian_email` and `guardian_phone` to `students` (nullable)
+- "Send QR to parents" bulk action → server function:
+  - Generates a per-student PDF in memory (existing util)
+  - Emails parent with PDF attached + a `/lookup/:token` link
+- Email transport: scaffold transactional email (Resend via existing email infra). SMS deferred unless you've got a provider in mind — we'd add a stub now and wire later.
+- Track `qr_last_sent_at` per student so admins can see who's been notified.
 
-**Step 1 — Attendance settings** (~2 min) — *replaces the old "School profile"*
-- Section `SCHOOL BRANDING`: logo upload + a read-only summary chip showing org name + country flag (so it's clear we already have this; not editable here — link "Edit in Settings").
-- Section `TIMEZONE`: Select of common IANA zones, default = detected.
-- Section `ATTENDANCE WINDOW`: late-after time, absent-after time, with helper text explaining how kiosk applies them.
+**D. Apple / Google Wallet passes (new, behind a feature flag)**
+- Add "Add to Apple Wallet" / "Save to Google Wallet" buttons on the parent lookup page `/lookup/:token`
+- Apple: server function that builds a `.pkpass` (requires Apple Pass Type ID cert + team ID — we'll ask you to upload these as secrets when you're ready)
+- Google: server function that creates a Wallet object via Google Wallet API (needs service account JSON)
+- Ship the UI + server scaffolding now; mark the feature **disabled until certs are provided** so the rest of the MVP isn't blocked
 
-**Step 2 — Invite teachers** (~5 min)
-- Section `INVITE BY EMAIL`: multi-row email entry + "Add another", generates invite links.
-- Section `SHARE LINKS`: generated links with Copy + mailto Email buttons.
-- Callout: "You can add more later from Settings → Team."
+### 2. Lifecycle — revoke & reissue
 
-**Step 3 — Create your first class** (~3 min)
-- Section `CLASS DETAILS`: name*, grade, assigned teacher (Select; defaults to me).
-- Section `YOUR CLASSES`: list with edit/delete and an inline "Add another class" form.
+- Teachers can revoke a QR for any student in **their classes**; admins can revoke any.
+- "Revoke & reissue" action:
+  - Marks old token revoked (new column `revoked_at` on `students` or a `student_qr_tokens` history table — see Technical)
+  - Generates a new 24-char token
+  - Old QR scans return a clear "This QR has been replaced — please print a new one" message at the kiosk
+  - Audit row written (who, when, why — optional reason text)
+- "QR history" drawer per student showing every reissue
+- Bulk reissue (e.g. start of a new school year) — admin only
 
-**Step 4 — Add students & try it out** (~5 min) — *merged old steps 4+5 since "try it out" is one click each*
-- Section `PICK A CLASS`: class selector.
-- Section `QUICK ADD`: textarea, one student per line (`Full Name[, Optional ID]`); live preview list + count.
-- Section `BULK IMPORT`: link to CSV import route with a sample row.
-- Section `TRY IT NOW`: "Print QR sheets" and "Launch kiosk" buttons.
-- Primary CTA: `Finish setup` → `completeOnboarding` → `/app`.
+### 3. UX touch-ups on the kiosk
 
-## Validation (client + server)
+- On successful scan: show student photo + name for 1.5s so supervisor can verify
+- On revoked QR: red flash + "Card replaced — see teacher"
+- On unknown QR: amber flash + "Not recognized"
 
-Single zod schema per step, validated on Continue; inline `text-destructive` message under each field, red border on invalid inputs (matching reference). Continue disabled until the schema parses.
+## Technical notes
 
-- **Step 1**: `timezone` non-empty IANA-ish string; `day_cutoff_time` and `absent_after_time` match `HH:MM` and `absent_after_time > day_cutoff_time`; logo optional (≤2MB, `image/*`, checked before upload).
-- **Step 2**: each email trimmed, `z.string().email().max(255)`; dedupe within the list and against existing teachers; skip-allowed.
-- **Step 3**: name trimmed, 1–80 chars; grade ≤ 20 chars; teacherId optional uuid.
-- **Step 4**: at least 1 student to enable Finish (Skip still available); per-line parser caps name at 100 chars and external_id at 40 chars, trims, drops empties, rejects > 200 rows with a friendly error.
+**Schema changes**
+- `students`: add `guardian_email text`, `guardian_phone text`, `photo_url text`, `qr_last_sent_at timestamptz`
+- New table `student_qr_tokens` (history of all tokens; current = latest `revoked_at IS NULL`):
+  - `id`, `student_id`, `token` (unique), `issued_at`, `issued_by`, `revoked_at`, `revoked_by`, `reason`
+- Migrate current `students.qr_token` into the history table; `students.qr_token` becomes a generated/cached reference to the active token (or we keep it as-is and just join — TBD during build)
+- RLS: teachers can write history rows only for students in classes they own; admins unrestricted
+- GRANTs to `authenticated` + `service_role` per the standard pattern
 
-Server functions already exist; they keep their existing zod `inputValidator` (no changes needed). Errors from the server are surfaced via `toast.error` and as inline messages where field-scoped.
+**Server functions** (`createServerFn`, under `src/lib/`)
+- `revokeAndReissueStudentQr({ studentId, reason? })`
+- `sendQrToGuardians({ studentIds })` — uses scaffolded transactional email
+- `generateStickerSheet({ scope, layout })` — returns PDF bytes
+- `issueApplePass({ studentId })` / `issueGoogleWalletPass({ studentId })` — behind feature flag
 
-## Progress logic
+**Storage**
+- Reuse `school-assets` bucket for student photos (`students/<id>.jpg`) with RLS scoped to school members
 
-`completedSteps` derived from data, not local state:
-1. Attendance settings saved (settings has non-default `day_cutoff_time` OR explicit save flag — track via existing `onboarded_at`-adjacent state; simplest: a `settingsTouchedAt` check via `updated_at` after first save in this session, fallback to "step visited and Continue clicked").
-2. `teachers.length > 0` OR step explicitly skipped (local).
-3. `classes.length > 0`.
-4. Any students exist.
+**Frontend**
+- `src/routes/_authenticated/app.students.tsx`: add "Print stickers", "Email parents", "Reissue QR" actions
+- `src/routes/_authenticated/app.classes.$classId.tsx`: same bulk actions scoped to class
+- `src/components/students/QrHistoryDrawer.tsx` (new)
+- Kiosk page: handle `revoked` response state
 
-Drives the ring %, row checks, and the right-rail step states. Any visited step is clickable.
+**Email infra**
+- Will call `email_domain--get_project_custom_domain` and `setup_email_infra` + `scaffold_transactional_email` during build
+- One template: "Your child's RollCall attendance QR" with PDF attachment + lookup link
 
-## Files
+**Out of scope for this round** (call them out so we don't scope-creep):
+- Gate kiosk, event mode, bus boarding
+- Rotating QR in companion app
+- PIN verification
+- SMS delivery (UI hook only, no provider wired)
 
-- Rewrite `src/routes/_authenticated/app.onboarding.tsx` (single file). Helpers in-file: `ProgressRing`, `StepRow`, `SectionHeader`, `StepShell`, `useStepForm` (small zod-driven helper).
-- No new routes. No DB changes. No server-fn changes.
-- Reuse: `getMyContext`, `getSettings`, `updateSettings`, `inviteTeacher`, `listTeachers`, `createClass`, `listClasses`, `bulkAddStudents`, `createKioskSession`, `completeOnboarding`.
+## Order of work
 
-## Out of scope
+1. Schema migration + token history table + RLS/GRANTs
+2. Revoke/reissue server fn + UI + kiosk "revoked" handling
+3. Sticker sheet PDF generator + UI entry points
+4. Email infra scaffold + "Send QR to parents" flow
+5. Wallet pass scaffolding (feature-flagged off until certs)
+6. Polish: kiosk verify-flash, QR history drawer
 
-- Dashboard checklist card (will auto-reflect via existing `setupProgress`).
-- Invite acceptance flow.
-- New `school_settings` columns.
+Sound right? Anything to add, drop, or reprioritize before I start?
