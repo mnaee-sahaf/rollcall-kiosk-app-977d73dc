@@ -1,74 +1,71 @@
-# Rework org creation to match the Jibble flow
 
-Today, account, organization, and admin role are all created in one signup form (with a trigger auto-granting admin to the first user). We will split that into a staged flow so a new user explicitly decides whether to **create a new organization** or **join an existing one**, then walks through org details, devices, and a referral question before landing on the dashboard's existing setup checklist.
+## Goal
 
-## New end-to-end flow
+Rework `/app/onboarding` to feel like the reference: focused wizard with persistent progress sidebar, rich per-step content (sections, helper copy, learn-more links, time estimates), inline validation, and **no duplication of anything captured during `/welcome/create`**.
 
-```text
-1. /auth?mode=signup
-   - Just: Full name, Email, Password (no org name here)
-   - Creates the auth user. No role assigned yet.
+## What account creation already captured
 
-2. /welcome  (new — gating route)
-   - Two cards, mirroring Jibble:
-       [ Create a new organization ]   [ Join an organization ]
-   - Right card lists pending invites for this email (or "no invitations yet").
+From `welcome.create.tsx` → `school_settings`: `school_name`, `country`, `phone`, `industry`, `org_size`, `primary_role`, `devices`, `referral_source`. **Onboarding will not ask for any of these again.** Step 1 instead focuses on operational settings the wizard didn't cover.
 
-3. /welcome/create  (new — multi-step wizard)
-   Step 1: Organization details
-     - Organization / school name (required)
-     - Country, phone (optional)
-     - Industry / school type, organization size, your role
-   Step 2: Devices your team will use
-     - Multi-select: Shared Kiosk, Web Browser, Mobile (companion app), Digital roster
-   Step 3: How did you first hear about us?
-     - Single-select with options + "Other"
-   Submit -> creates school_settings, grants admin role, redirects to /app.
+## Layout shell
 
-4. /app
-   - Existing SetupChecklistCard takes over (school logo, teachers, classes, students).
+- Top bar (white, sticky): RollCall logo + "Onboarding" label; `X` close on the right → confirm dialog, then `skipAll()`.
+- Soft `#f6f7f9` body, two columns:
+  - **Left rail (sticky card)**: "Complete setting up your organization" heading, SVG progress ring with `%`, "N of 4 steps completed", step list (icon badge, label, "~X min", chevron, orange accent on active, check when done), "Need help?" footer link.
+  - **Right content panel (white card)**: step title + "Takes about X minutes" pill, one-line description, orange "Learn more about …" link, body split into uppercase SECTION headers with `i` tooltip, sticky footer with Back / Skip / Continue.
 
-5. Invite path (unchanged):
-   /auth?invite=TOKEN -> existing acceptInvite -> /app as teacher.
-```
+## Steps (now 4, since account creation owns the org profile)
 
-## Files to add
+**Step 1 — Attendance settings** (~2 min) — *replaces the old "School profile"*
+- Section `SCHOOL BRANDING`: logo upload + a read-only summary chip showing org name + country flag (so it's clear we already have this; not editable here — link "Edit in Settings").
+- Section `TIMEZONE`: Select of common IANA zones, default = detected.
+- Section `ATTENDANCE WINDOW`: late-after time, absent-after time, with helper text explaining how kiosk applies them.
 
-- `src/routes/welcome.tsx` — two-card chooser (Create org / Join org). Shows pending invites for the signed-in email.
-- `src/routes/welcome.create.tsx` — 3-step wizard (org details → devices → referral). Uses existing `Logo`, shadcn `Card`, `Input`, `Select`, `Checkbox`.
-- `src/lib/organization.functions.ts` — new server functions:
-  - `createOrganization({ schoolName, country, phone, industry, orgSize, role, devices[], referralSource })` — requires auth, errors if caller already has any role, fills `school_settings` (singleton update), grants `admin` role to caller.
-  - `getMyJoinables()` — returns pending teacher invites matching caller's email + whether org already exists.
+**Step 2 — Invite teachers** (~5 min)
+- Section `INVITE BY EMAIL`: multi-row email entry + "Add another", generates invite links.
+- Section `SHARE LINKS`: generated links with Copy + mailto Email buttons.
+- Callout: "You can add more later from Settings → Team."
 
-## Files to change
+**Step 3 — Create your first class** (~3 min)
+- Section `CLASS DETAILS`: name*, grade, assigned teacher (Select; defaults to me).
+- Section `YOUR CLASSES`: list with edit/delete and an inline "Add another class" form.
 
-- `src/routes/auth.tsx` — signup form drops the "Organization name" field. After signup, navigate to `/welcome` instead of `/app`.
-- `src/routes/create-organization.tsx` — repurpose as a thin redirect to `/welcome/create` (or delete and update Nav link) so there is one canonical creation flow.
-- `src/components/landing/Nav.tsx` — "Create organization" button routes to `/auth?mode=signup` (account first), keeping parity with Jibble.
-- `src/routes/_authenticated/route.tsx` — after auth check, if the user has no role AND no org exists for them, redirect to `/welcome`. Existing `needsOnboarding` redirect in `app.index.tsx` continues to handle post-creation steps.
-- `src/lib/auth.functions.ts` — `getMyContext` already returns `roles`; add a `hasOrgMembership` boolean so routing logic is explicit.
+**Step 4 — Add students & try it out** (~5 min) — *merged old steps 4+5 since "try it out" is one click each*
+- Section `PICK A CLASS`: class selector.
+- Section `QUICK ADD`: textarea, one student per line (`Full Name[, Optional ID]`); live preview list + count.
+- Section `BULK IMPORT`: link to CSV import route with a sample row.
+- Section `TRY IT NOW`: "Print QR sheets" and "Launch kiosk" buttons.
+- Primary CTA: `Finish setup` → `completeOnboarding` → `/app`.
 
-## Database
+## Validation (client + server)
 
-One migration:
-- Add columns to `public.school_settings`: `country text`, `phone text`, `industry text`, `org_size text`, `primary_role text`, `devices text[] default '{}'`, `referral_source text`.
-- Update `public.handle_new_user()`: **stop auto-granting admin to the first user**. It will only create the profile row and (if `invite_token` metadata is present) accept a teacher invite. Admin role is now granted exclusively by `createOrganization`.
-- Keep RLS as-is; the new columns inherit existing admin-only update policy on `school_settings`.
+Single zod schema per step, validated on Continue; inline `text-destructive` message under each field, red border on invalid inputs (matching reference). Continue disabled until the schema parses.
 
-## UX details to mirror from Jibble
+- **Step 1**: `timezone` non-empty IANA-ish string; `day_cutoff_time` and `absent_after_time` match `HH:MM` and `absent_after_time > day_cutoff_time`; logo optional (≤2MB, `image/*`, checked before upload).
+- **Step 2**: each email trimmed, `z.string().email().max(255)`; dedupe within the list and against existing teachers; skip-allowed.
+- **Step 3**: name trimmed, 1–80 chars; grade ≤ 20 chars; teacherId optional uuid.
+- **Step 4**: at least 1 student to enable Finish (Skip still available); per-line parser caps name at 100 chars and external_id at 40 chars, trims, drops empties, rejects > 200 rows with a friendly error.
 
-- Two-card chooser uses a clear illustration / icon per side, with primary CTA on the Create card.
-- Wizard shows a step indicator ("Step 2 of 3") and a Back button on steps 2–3.
-- Continue button stays disabled until the step is valid (required fields filled, at least one device selected, one referral source chosen).
-- Page header shows the signed-in email with a small dropdown to sign out (so users who picked the wrong account can switch without leaving the flow).
+Server functions already exist; they keep their existing zod `inputValidator` (no changes needed). Errors from the server are surfaced via `toast.error` and as inline messages where field-scoped.
+
+## Progress logic
+
+`completedSteps` derived from data, not local state:
+1. Attendance settings saved (settings has non-default `day_cutoff_time` OR explicit save flag — track via existing `onboarded_at`-adjacent state; simplest: a `settingsTouchedAt` check via `updated_at` after first save in this session, fallback to "step visited and Continue clicked").
+2. `teachers.length > 0` OR step explicitly skipped (local).
+3. `classes.length > 0`.
+4. Any students exist.
+
+Drives the ring %, row checks, and the right-rail step states. Any visited step is clickable.
+
+## Files
+
+- Rewrite `src/routes/_authenticated/app.onboarding.tsx` (single file). Helpers in-file: `ProgressRing`, `StepRow`, `SectionHeader`, `StepShell`, `useStepForm` (small zod-driven helper).
+- No new routes. No DB changes. No server-fn changes.
+- Reuse: `getMyContext`, `getSettings`, `updateSettings`, `inviteTeacher`, `listTeachers`, `createClass`, `listClasses`, `bulkAddStudents`, `createKioskSession`, `completeOnboarding`.
 
 ## Out of scope
 
-- True multi-tenant orgs. The backend remains single-organization (`school_settings` singleton). The new flow is the staged UX; it does not introduce per-user organization isolation. If you want multi-org later, that is a separate, larger refactor.
-- Phone-number signup, captcha, Terms checkbox screens from the reference — not needed for the MVP.
-
-## Technical notes
-
-- `createOrganization` runs as `requireSupabaseAuth` and uses the user's session client to update `school_settings` and `user_roles`. To grant the admin role, it falls back to `supabaseAdmin` (loaded inside the handler) because RLS on `user_roles` blocks self-promotion.
-- The wizard stores partial state in component state (no draft persistence); refresh restarts the wizard. Acceptable for MVP.
-- `/welcome` and `/welcome/create` live outside `_authenticated/` but call `requireSupabaseAuth` server fns; each route does a client-side `supabase.auth.getUser()` check and redirects to `/auth` if missing, matching the existing `auth.tsx` pattern.
+- Dashboard checklist card (will auto-reflect via existing `setupProgress`).
+- Invite acceptance flow.
+- New `school_settings` columns.
