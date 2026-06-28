@@ -103,6 +103,9 @@ function ClassDetailPage() {
     return d.toISOString().slice(0, 10);
   });
   const [exportTo, setExportTo] = useState(new Date().toISOString().slice(0, 10));
+  const [qrHistoryFor, setQrHistoryFor] = useState<{ id: string; name: string } | null>(null);
+  const [stickerOpen, setStickerOpen] = useState(false);
+
 
   useEffect(() => {
     fCtx({}).then((c) => {
