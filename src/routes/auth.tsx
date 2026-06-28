@@ -136,7 +136,7 @@ function AuthPage() {
               type="button"
               variant="default"
               className="w-full mt-3"
-              onClick={() => setMode("signup")}
+              onClick={() => navigate({ to: "/create-organization" })}
             >
               Create new organization
             </Button>

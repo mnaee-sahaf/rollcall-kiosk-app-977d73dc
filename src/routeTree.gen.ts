@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as CreateOrganizationRouteImport } from './routes/create-organization'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -31,6 +32,11 @@ import { Route as AuthenticatedAppClassesClassIdQrRouteImport } from './routes/_
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreateOrganizationRoute = CreateOrganizationRouteImport.update({
+  id: '/create-organization',
+  path: '/create-organization',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -128,6 +134,7 @@ const AuthenticatedAppClassesClassIdQrRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/create-organization': typeof CreateOrganizationRoute
   '/demo': typeof DemoRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/create-organization': typeof CreateOrganizationRoute
   '/demo': typeof DemoRoute
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
@@ -167,6 +175,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/create-organization': typeof CreateOrganizationRoute
   '/demo': typeof DemoRoute
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
@@ -188,6 +197,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/create-organization'
     | '/demo'
     | '/app'
     | '/kiosk/$token'
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/create-organization'
     | '/demo'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
@@ -226,6 +237,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/create-organization'
     | '/demo'
     | '/_authenticated/app'
     | '/kiosk/$token'
@@ -247,6 +259,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  CreateOrganizationRoute: typeof CreateOrganizationRoute
   DemoRoute: typeof DemoRoute
   KioskTokenRoute: typeof KioskTokenRoute
   LookupQrTokenRoute: typeof LookupQrTokenRoute
@@ -259,6 +272,13 @@ declare module '@tanstack/react-router' {
       path: '/demo'
       fullPath: '/demo'
       preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/create-organization': {
+      id: '/create-organization'
+      path: '/create-organization'
+      fullPath: '/create-organization'
+      preLoaderRoute: typeof CreateOrganizationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -455,6 +475,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  CreateOrganizationRoute: CreateOrganizationRoute,
   DemoRoute: DemoRoute,
   KioskTokenRoute: KioskTokenRoute,
   LookupQrTokenRoute: LookupQrTokenRoute,
