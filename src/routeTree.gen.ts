@@ -14,6 +14,8 @@ import { Route as CreateOrganizationRouteImport } from './routes/create-organiza
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WelcomeIndexRouteImport } from './routes/welcome.index'
+import { Route as WelcomeCreateRouteImport } from './routes/welcome.create'
 import { Route as LookupQrTokenRouteImport } from './routes/lookup.$qrToken'
 import { Route as KioskTokenRouteImport } from './routes/kiosk.$token'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
@@ -51,6 +53,16 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeIndexRoute = WelcomeIndexRouteImport.update({
+  id: '/welcome/',
+  path: '/welcome/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeCreateRoute = WelcomeCreateRouteImport.update({
+  id: '/welcome/create',
+  path: '/welcome/create',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LookupQrTokenRoute = LookupQrTokenRouteImport.update({
@@ -139,6 +151,8 @@ export interface FileRoutesByFullPath {
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
+  '/welcome/create': typeof WelcomeCreateRoute
+  '/welcome/': typeof WelcomeIndexRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/app/import': typeof AuthenticatedAppImportRoute
   '/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -158,6 +172,8 @@ export interface FileRoutesByTo {
   '/demo': typeof DemoRoute
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
+  '/welcome/create': typeof WelcomeCreateRoute
+  '/welcome': typeof WelcomeIndexRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/app/import': typeof AuthenticatedAppImportRoute
   '/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -180,6 +196,8 @@ export interface FileRoutesById {
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
+  '/welcome/create': typeof WelcomeCreateRoute
+  '/welcome/': typeof WelcomeIndexRoute
   '/_authenticated/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/_authenticated/app/import': typeof AuthenticatedAppImportRoute
   '/_authenticated/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -202,6 +220,8 @@ export interface FileRouteTypes {
     | '/app'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
+    | '/welcome/create'
+    | '/welcome/'
     | '/app/classes'
     | '/app/import'
     | '/app/onboarding'
@@ -221,6 +241,8 @@ export interface FileRouteTypes {
     | '/demo'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
+    | '/welcome/create'
+    | '/welcome'
     | '/app/classes'
     | '/app/import'
     | '/app/onboarding'
@@ -242,6 +264,8 @@ export interface FileRouteTypes {
     | '/_authenticated/app'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
+    | '/welcome/create'
+    | '/welcome/'
     | '/_authenticated/app/classes'
     | '/_authenticated/app/import'
     | '/_authenticated/app/onboarding'
@@ -263,6 +287,8 @@ export interface RootRouteChildren {
   DemoRoute: typeof DemoRoute
   KioskTokenRoute: typeof KioskTokenRoute
   LookupQrTokenRoute: typeof LookupQrTokenRoute
+  WelcomeCreateRoute: typeof WelcomeCreateRoute
+  WelcomeIndexRoute: typeof WelcomeIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -300,6 +326,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome/': {
+      id: '/welcome/'
+      path: '/welcome'
+      fullPath: '/welcome/'
+      preLoaderRoute: typeof WelcomeIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome/create': {
+      id: '/welcome/create'
+      path: '/welcome/create'
+      fullPath: '/welcome/create'
+      preLoaderRoute: typeof WelcomeCreateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lookup/$qrToken': {
@@ -479,6 +519,8 @@ const rootRouteChildren: RootRouteChildren = {
   DemoRoute: DemoRoute,
   KioskTokenRoute: KioskTokenRoute,
   LookupQrTokenRoute: LookupQrTokenRoute,
+  WelcomeCreateRoute: WelcomeCreateRoute,
+  WelcomeIndexRoute: WelcomeIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

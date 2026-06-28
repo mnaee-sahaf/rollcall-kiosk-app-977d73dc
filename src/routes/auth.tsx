@@ -25,7 +25,6 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [schoolName, setSchoolName] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
 
@@ -65,17 +64,18 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/app`,
+            emailRedirectTo: `${window.location.origin}/welcome`,
             data: {
               full_name: fullName,
-              school_name: schoolName,
               invite_token: invite,
             },
           },
         });
         if (error) throw error;
         toast.success("Account created");
-        navigate({ to: "/app" });
+        // Invited teachers get a role from the trigger and can go straight to /app.
+        // Everyone else picks Create vs Join on /welcome.
+        navigate({ to: invite ? "/app" : "/welcome" });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
@@ -86,13 +86,13 @@ function AuthPage() {
 
   async function handleGoogle() {
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/app",
+      redirect_uri: window.location.origin + "/welcome",
     });
     if (result.error) {
       toast.error(result.error.message ?? "Google sign-in failed");
       return;
     }
-    if (!result.redirected) navigate({ to: "/app" });
+    if (!result.redirected) navigate({ to: "/welcome" });
   }
 
   return (
@@ -106,11 +106,11 @@ function AuthPage() {
             ? "Sign in"
             : invite
               ? "Accept teacher invite"
-              : "Create your organization"}
+              : "Create your account"}
         </h1>
         {mode === "signup" && !invite && (
           <p className="mt-2 text-center text-sm text-muted-foreground">
-            Set up a new RollCall org for your school. You'll be the admin.
+            One quick account, then choose whether to start a new organization or join one.
           </p>
         )}
         {invite && (
@@ -132,44 +132,12 @@ function AuthPage() {
           </div>
         )}
 
-        {mode === "signin" && !invite && (
-          <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4">
-            <div className="text-sm font-semibold">New to RollCall?</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Spin up a new organization for your school in under a minute.
-            </p>
-            <Button
-              type="button"
-              variant="default"
-              className="w-full mt-3"
-              onClick={() => navigate({ to: "/create-organization" })}
-            >
-              Create new organization
-            </Button>
-          </div>
-        )}
-
-
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {mode === "signup" && (
-            <>
-              <div>
-                <Label htmlFor="name">Full name</Label>
-                <Input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-              </div>
-              {!invite && (
-                <div>
-                  <Label htmlFor="school">Organization / school name</Label>
-                  <Input
-                    id="school"
-                    value={schoolName}
-                    onChange={(e) => setSchoolName(e.target.value)}
-                    placeholder="Lincoln High School"
-                    required
-                  />
-                </div>
-              )}
-            </>
+            <div>
+              <Label htmlFor="name">Full name</Label>
+              <Input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+            </div>
           )}
           <div>
             <Label htmlFor="email">Email</Label>
