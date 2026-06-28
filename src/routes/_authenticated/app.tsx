@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getMyContext } from "@/lib/auth.functions";
@@ -71,6 +71,11 @@ function AppLayout() {
         </div>
       </div>
     );
+  }
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isFullscreen = pathname.startsWith("/app/onboarding");
+  if (isFullscreen) {
+    return <Outlet />;
   }
   return (
     <AppShell isAdmin={state.isAdmin}>
