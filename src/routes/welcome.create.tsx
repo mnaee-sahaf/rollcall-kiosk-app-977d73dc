@@ -27,6 +27,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getCountryFlag } from "@/lib/countryFlags";
 
 export const Route = createFileRoute("/welcome/create")({
   ssr: false,
