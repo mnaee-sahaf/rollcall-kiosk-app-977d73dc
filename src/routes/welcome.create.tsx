@@ -240,7 +240,12 @@ function CreateOrgWizard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="country">Country</Label>
-                  <Input id="country" value={country} onChange={(e) => setCountry(e.target.value)} placeholder="United States" />
+                  <Select value={country} onValueChange={setCountry}>
+                    <SelectTrigger id="country"><SelectValue placeholder="Select a country" /></SelectTrigger>
+                    <SelectContent>
+                      {COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label htmlFor="phone">Phone</Label>
