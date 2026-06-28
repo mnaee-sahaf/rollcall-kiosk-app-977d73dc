@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   getClass,
   addStudent,
-  rotateStudentQr,
+  // rotateStudentQr replaced by QrHistoryDrawer
   deleteStudent,
   updateClass,
   deleteClass,
@@ -50,6 +50,9 @@ import {
   StickyNote,
   Settings2,
 } from "lucide-react";
+import { QrHistoryDrawer } from "@/components/students/QrHistoryDrawer";
+import { StickerSheetDialog } from "@/components/students/StickerSheetDialog";
+
 
 export const Route = createFileRoute("/_authenticated/app/classes/$classId")({
   component: ClassDetailPage,
@@ -65,7 +68,7 @@ function ClassDetailPage() {
   const fGetClass = useServerFn(getClass);
   const fRoster = useServerFn(getClassRoster);
   const fAdd = useServerFn(addStudent);
-  const fRotate = useServerFn(rotateStudentQr);
+  // fRotate removed; reissue handled in QrHistoryDrawer
   const fDeleteStudent = useServerFn(deleteStudent);
   const fMark = useServerFn(markAttendance);
   const fBulk = useServerFn(bulkMarkAllPresent);
@@ -103,6 +106,9 @@ function ClassDetailPage() {
     return d.toISOString().slice(0, 10);
   });
   const [exportTo, setExportTo] = useState(new Date().toISOString().slice(0, 10));
+  const [qrHistoryFor, setQrHistoryFor] = useState<{ id: string; name: string } | null>(null);
+  const [stickerOpen, setStickerOpen] = useState(false);
+
 
   useEffect(() => {
     fCtx({}).then((c) => {
@@ -273,6 +279,10 @@ function ClassDetailPage() {
               <Printer className="h-4 w-4 mr-2" /> Print QR sheet
             </Button>
           </Link>
+          <Button variant="outline" onClick={() => setStickerOpen(true)}>
+            <Printer className="h-4 w-4 mr-2" /> Stickers
+          </Button>
+
         </div>
       </div>
 
@@ -487,15 +497,12 @@ function ClassDetailPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={async () => {
-                      await fRotate({ data: { studentId: s.id } });
-                      toast.success("QR rotated");
-                      refresh();
-                    }}
-                    title="Rotate QR token"
+                    onClick={() => setQrHistoryFor({ id: s.id, name: s.full_name })}
+                    title="QR history & reissue"
                   >
                     <RefreshCcw className="h-4 w-4" />
                   </Button>
+
                   <Button
                     size="sm"
                     variant="ghost"
@@ -625,6 +632,21 @@ function ClassDetailPage() {
         </SheetContent>
       </Sheet>
 
+      <QrHistoryDrawer
+        studentId={qrHistoryFor?.id ?? null}
+        studentName={qrHistoryFor?.name ?? ""}
+        open={!!qrHistoryFor}
+        onOpenChange={(v) => !v && setQrHistoryFor(null)}
+        onRotated={refresh}
+      />
+
+      <StickerSheetDialog
+        open={stickerOpen}
+        onOpenChange={setStickerOpen}
+        scope={{ classId, label: cls?.name ?? "this class" }}
+      />
+
     </div>
+
   );
 }

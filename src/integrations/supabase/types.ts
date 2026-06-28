@@ -224,6 +224,47 @@ export type Database = {
         }
         Relationships: []
       }
+      student_qr_tokens: {
+        Row: {
+          id: string
+          issued_at: string
+          issued_by: string | null
+          reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          student_id: string
+          token: string
+        }
+        Insert: {
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          student_id: string
+          token: string
+        }
+        Update: {
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          student_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_qr_tokens_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
           active: boolean
@@ -231,7 +272,11 @@ export type Database = {
           created_at: string
           external_id: string | null
           full_name: string
+          guardian_email: string | null
+          guardian_phone: string | null
           id: string
+          photo_url: string | null
+          qr_last_sent_at: string | null
           qr_token: string
         }
         Insert: {
@@ -240,7 +285,11 @@ export type Database = {
           created_at?: string
           external_id?: string | null
           full_name: string
+          guardian_email?: string | null
+          guardian_phone?: string | null
           id?: string
+          photo_url?: string | null
+          qr_last_sent_at?: string | null
           qr_token?: string
         }
         Update: {
@@ -249,7 +298,11 @@ export type Database = {
           created_at?: string
           external_id?: string | null
           full_name?: string
+          guardian_email?: string | null
+          guardian_phone?: string | null
           id?: string
+          photo_url?: string | null
+          qr_last_sent_at?: string | null
           qr_token?: string
         }
         Relationships: [
