@@ -678,11 +678,10 @@ function StepSchool({ onDone }: { onDone: () => void }) {
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <Label className="text-sm">Late after</Label>
-            <Input
-              type="time"
+            <TimePicker
               value={cutoff}
-              onChange={(e) => setCutoff(e.target.value)}
-              className={errors.day_cutoff_time ? "border-destructive" : ""}
+              onChange={setCutoff}
+              invalid={!!errors.day_cutoff_time}
             />
             <FieldError message={errors.day_cutoff_time} />
             <p className="text-xs text-muted-foreground mt-1">
@@ -691,11 +690,10 @@ function StepSchool({ onDone }: { onDone: () => void }) {
           </div>
           <div>
             <Label className="text-sm">Absent after</Label>
-            <Input
-              type="time"
+            <TimePicker
               value={absentAfter}
-              onChange={(e) => setAbsentAfter(e.target.value)}
-              className={errors.absent_after_time ? "border-destructive" : ""}
+              onChange={setAbsentAfter}
+              invalid={!!errors.absent_after_time}
             />
             <FieldError message={errors.absent_after_time} />
             <p className="text-xs text-muted-foreground mt-1">
