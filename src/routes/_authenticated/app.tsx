@@ -72,6 +72,11 @@ function AppLayout() {
       </div>
     );
   }
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isFullscreen = pathname.startsWith("/app/onboarding");
+  if (isFullscreen) {
+    return <Outlet />;
+  }
   return (
     <AppShell isAdmin={state.isAdmin}>
       <Outlet />
