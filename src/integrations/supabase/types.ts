@@ -167,10 +167,17 @@ export type Database = {
       school_settings: {
         Row: {
           absent_after_time: string
+          country: string | null
           day_cutoff_time: string
+          devices: string[]
           id: string
+          industry: string | null
           logo_url: string | null
           onboarded_at: string | null
+          org_size: string | null
+          phone: string | null
+          primary_role: string | null
+          referral_source: string | null
           school_name: string | null
           singleton: boolean
           timezone: string
@@ -179,10 +186,17 @@ export type Database = {
         }
         Insert: {
           absent_after_time?: string
+          country?: string | null
           day_cutoff_time?: string
+          devices?: string[]
           id?: string
+          industry?: string | null
           logo_url?: string | null
           onboarded_at?: string | null
+          org_size?: string | null
+          phone?: string | null
+          primary_role?: string | null
+          referral_source?: string | null
           school_name?: string | null
           singleton?: boolean
           timezone?: string
@@ -191,10 +205,17 @@ export type Database = {
         }
         Update: {
           absent_after_time?: string
+          country?: string | null
           day_cutoff_time?: string
+          devices?: string[]
           id?: string
+          industry?: string | null
           logo_url?: string | null
           onboarded_at?: string | null
+          org_size?: string | null
+          phone?: string | null
+          primary_role?: string | null
+          referral_source?: string | null
           school_name?: string | null
           singleton?: boolean
           timezone?: string
