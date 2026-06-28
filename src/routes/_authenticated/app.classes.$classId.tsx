@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   getClass,
   addStudent,
-  rotateStudentQr,
+  // rotateStudentQr replaced by QrHistoryDrawer
   deleteStudent,
   updateClass,
   deleteClass,
@@ -65,7 +65,7 @@ function ClassDetailPage() {
   const fGetClass = useServerFn(getClass);
   const fRoster = useServerFn(getClassRoster);
   const fAdd = useServerFn(addStudent);
-  const fRotate = useServerFn(rotateStudentQr);
+  // fRotate removed; reissue handled in QrHistoryDrawer
   const fDeleteStudent = useServerFn(deleteStudent);
   const fMark = useServerFn(markAttendance);
   const fBulk = useServerFn(bulkMarkAllPresent);
