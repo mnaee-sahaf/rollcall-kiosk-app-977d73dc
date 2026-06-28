@@ -279,6 +279,10 @@ function ClassDetailPage() {
               <Printer className="h-4 w-4 mr-2" /> Print QR sheet
             </Button>
           </Link>
+          <Button variant="outline" onClick={() => setStickerOpen(true)}>
+            <Printer className="h-4 w-4 mr-2" /> Stickers
+          </Button>
+
         </div>
       </div>
 
