@@ -120,7 +120,26 @@ export const recordKioskScan = createServerFn({ method: "POST" })
       .select("id, full_name, class_id, active")
       .eq("qr_token", data.qrToken)
       .maybeSingle();
-    if (!student) return { ok: false as const, error: "Unknown student QR" };
+    if (!student) {
+      // Could be a revoked/old token. Check history for a friendlier message.
+      const { data: hist } = await supabaseAdmin
+        .from("student_qr_tokens")
+        .select("revoked_at, students(full_name)")
+        .eq("token", data.qrToken)
+        .maybeSingle();
+      if (hist?.revoked_at) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const name = (hist as any).students?.full_name as string | undefined;
+        return {
+          ok: false as const,
+          replaced: true,
+          error: name
+            ? `${name}'s QR has been replaced — please print a new card.`
+            : "This QR card has been replaced — please print a new one.",
+        };
+      }
+      return { ok: false as const, error: "Unknown student QR" };
+    }
     if (!student.active) return { ok: false as const, error: "Student inactive" };
     if (student.class_id !== session.class_id)
       return { ok: false as const, error: `${student.full_name} is not in this class` };
