@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { getJoinContext, type } from "@/lib/organization.functions";
+import { getJoinContext } from "@/lib/organization.functions";
 import { acceptInvite } from "@/lib/auth.functions";
 import { Logo } from "@/components/landing/Logo";
 import { Button } from "@/components/ui/button";
