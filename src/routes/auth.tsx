@@ -31,9 +31,15 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setCurrentEmail(data.user.email ?? null);
+      if (!data.user) return;
+      // If already signed in and just trying to sign in, send them straight to the app.
+      if (mode === "signin" && !invite) {
+        navigate({ to: "/app", replace: true });
+        return;
+      }
+      setCurrentEmail(data.user.email ?? null);
     });
-  }, []);
+  }, [mode, invite, navigate]);
 
   useEffect(() => {
     if (invite) setMode("signup");
