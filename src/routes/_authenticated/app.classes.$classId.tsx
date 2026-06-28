@@ -487,15 +487,12 @@ function ClassDetailPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={async () => {
-                      await fRotate({ data: { studentId: s.id } });
-                      toast.success("QR rotated");
-                      refresh();
-                    }}
-                    title="Rotate QR token"
+                    onClick={() => setQrHistoryFor({ id: s.id, name: s.full_name })}
+                    title="QR history & reissue"
                   >
                     <RefreshCcw className="h-4 w-4" />
                   </Button>
+
                   <Button
                     size="sm"
                     variant="ghost"
