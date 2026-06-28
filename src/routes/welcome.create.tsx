@@ -27,6 +27,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getCountryFlag } from "@/lib/countryFlags";
 
 export const Route = createFileRoute("/welcome/create")({
   ssr: false,
@@ -243,7 +244,15 @@ function CreateOrgWizard() {
                   <Select value={country} onValueChange={setCountry}>
                     <SelectTrigger id="country"><SelectValue placeholder="Select a country" /></SelectTrigger>
                     <SelectContent>
-                      {COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      {COUNTRIES.map((c) => {
+                        const flag = getCountryFlag(c);
+                        return (
+                          <SelectItem key={c} value={c}>
+                            <span className="mr-2">{flag}</span>
+                            {c}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
