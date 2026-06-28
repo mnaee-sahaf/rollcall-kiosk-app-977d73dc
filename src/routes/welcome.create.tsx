@@ -168,7 +168,7 @@ function CreateOrgWizard() {
         },
       });
       toast.success("Organization created");
-      navigate({ to: "/app", replace: true });
+      navigate({ to: "/app", search: { welcome: 1 }, replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create organization");
       setSubmitting(false);
