@@ -25,7 +25,6 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [schoolName, setSchoolName] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
 
