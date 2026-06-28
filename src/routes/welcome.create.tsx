@@ -149,6 +149,8 @@ function CreateOrgWizard() {
     industry.trim().length > 0 &&
     orgSize.trim().length > 0 &&
     role.trim().length > 0;
+  const step2Valid = devices.length > 0;
+  const step3Valid = referralSource.length > 0;
 
   async function handleSubmit() {
     setSubmitting(true);
