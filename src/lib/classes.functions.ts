@@ -197,7 +197,15 @@ export const updateStudent = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      full_name?: string;
+      external_id?: string | null;
+      class_id?: string;
+      active?: boolean;
+      guardian_email?: string | null;
+      guardian_phone?: string | null;
+      photo_url?: string | null;
+    } = {};
     if (data.full_name !== undefined) patch.full_name = data.full_name;
     if (data.external_id !== undefined) patch.external_id = data.external_id;
     if (data.class_id !== undefined) patch.class_id = data.class_id;
@@ -206,6 +214,7 @@ export const updateStudent = createServerFn({ method: "POST" })
       patch.guardian_email = data.guardian_email === "" ? null : data.guardian_email;
     if (data.guardian_phone !== undefined) patch.guardian_phone = data.guardian_phone;
     if (data.photo_url !== undefined) patch.photo_url = data.photo_url;
+
     const { error } = await context.supabase
       .from("students")
       .update(patch)
