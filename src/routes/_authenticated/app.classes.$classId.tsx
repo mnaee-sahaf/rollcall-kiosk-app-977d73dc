@@ -632,6 +632,21 @@ function ClassDetailPage() {
         </SheetContent>
       </Sheet>
 
+      <QrHistoryDrawer
+        studentId={qrHistoryFor?.id ?? null}
+        studentName={qrHistoryFor?.name ?? ""}
+        open={!!qrHistoryFor}
+        onOpenChange={(v) => !v && setQrHistoryFor(null)}
+        onRotated={refresh}
+      />
+
+      <StickerSheetDialog
+        open={stickerOpen}
+        onOpenChange={setStickerOpen}
+        scope={{ classId, label: cls?.name ?? "this class" }}
+      />
+
     </div>
+
   );
 }
