@@ -204,23 +204,14 @@ function AuthPage() {
           Continue with Google
         </Button>
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          {mode === "signin" ? (
-            <>
-              Have an account on another org?{" "}
-              <button className="text-primary underline" onClick={() => setMode("signup")} type="button">
-                Create a different one
-              </button>
-            </>
-          ) : (
-            <>
-              Already have one?{" "}
-              <button className="text-primary underline" onClick={() => setMode("signin")} type="button">
-                Sign in
-              </button>
-            </>
-          )}
-        </p>
+        {mode === "signup" && (
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Already have one?{" "}
+            <button className="text-primary underline" onClick={() => setMode("signin")} type="button">
+              Sign in
+            </button>
+          </p>
+        )}
 
       </div>
     </div>
