@@ -172,6 +172,25 @@ function AuthPage() {
           Continue with Google
         </Button>
 
+        {mode === "signin" && (
+          <>
+            <div className="my-6 h-px bg-border" />
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-3">
+                New to RollCall?
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => setMode("signup")}
+              >
+                Create an organization account
+              </Button>
+            </div>
+          </>
+        )}
+
         {mode === "signup" && (
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have one?{" "}
