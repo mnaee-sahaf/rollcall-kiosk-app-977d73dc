@@ -1,4 +1,6 @@
 
+create extension if not exists pgcrypto;
+
 -- =========== ENUMS ===========
 create type public.app_role as enum ('admin', 'teacher');
 create type public.attendance_method as enum ('kiosk', 'manual');
@@ -81,7 +83,7 @@ create table public.students (
   class_id uuid not null references public.classes(id) on delete cascade,
   full_name text not null,
   external_id text,
-  qr_token text not null unique default encode(gen_random_bytes(18), 'hex'),
+  qr_token text not null unique default encode(extensions.gen_random_bytes(18), 'hex'),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -95,7 +97,7 @@ create table public.kiosk_sessions (
   id uuid primary key default gen_random_uuid(),
   class_id uuid not null references public.classes(id) on delete cascade,
   created_by uuid not null references auth.users(id) on delete cascade,
-  token text not null unique default encode(gen_random_bytes(24), 'hex'),
+  token text not null unique default encode(extensions.gen_random_bytes(24), 'hex'),
   starts_at timestamptz not null default now(),
   expires_at timestamptz not null,
   revoked_at timestamptz,

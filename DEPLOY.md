@@ -4,7 +4,7 @@ QR-based attendance for schools. Standalone deploy on **Vercel** (frontend + Tan
 
 ## Stack
 
-- TanStack Start v1 (React 19, Vite 7, Nitro)
+- TanStack Start v1 (React 19, Vite 8, Nitro)
 - Supabase (Postgres, Auth, Storage, RLS)
 - Tailwind v4 + shadcn/ui
 
@@ -23,6 +23,7 @@ bun run db:types            # regenerate src/integrations/supabase/types.ts
 ```
 
 Then in Supabase Dashboard → **Project Settings → API**, copy:
+
 - `Project URL` → `SUPABASE_URL`
 - `anon / publishable key` → `SUPABASE_PUBLISHABLE_KEY`
 - `service_role key` → `SUPABASE_SERVICE_ROLE_KEY` (server-only)
@@ -44,14 +45,15 @@ In **Google Cloud Console**:
 6. Copy Client ID + Secret → Supabase Dashboard → **Authentication → Providers → Google → Enable**.
 
 In Supabase Dashboard → **Authentication → URL Configuration**:
+
 - Site URL: your Vercel prod URL
 - Additional redirect URLs: `https://<your-vercel-domain>/**`, `http://localhost:8080/**`
 
 ### 3. Vercel
 
 1. Import the git repo into Vercel.
-2. Framework preset: **Other** (Vercel auto-detects Nitro from TanStack Start).
-3. Build command: `bun run build`. Install command: `bun install`.
+2. Framework preset: **TanStack Start** if available, otherwise **Other** with Nitro auto-detection.
+3. Build command and install command are pinned in `vercel.json`: `NITRO_PRESET=vercel npm run build` and `npm install`.
 4. Environment variables (Production + Preview):
    - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`
    - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -69,7 +71,7 @@ bun run db:push
 bun run db:types
 ```
 
-If you edit schema in the Supabase Studio (avoid this — losses your git source of truth):
+If you edit schema in the Supabase Studio (avoid this — it loses your git source of truth):
 
 ```bash
 bun run db:diff <change_name>   # captures remote diff into a migration file
@@ -86,7 +88,7 @@ Local dev connects to your **remote** Supabase project (no Docker required). All
 
 ## Smoke test after deploy
 
-1. Sign up with email/password — first account becomes admin via trigger.
+1. Sign up with email/password, then complete organization creation to become admin.
 2. Sign in with Google — should round-trip through `/auth/callback`.
 3. Onboarding wizard → invite teacher → create class → add students.
 4. Print student QR → launch kiosk → scan a code → attendance event appears.
@@ -94,12 +96,12 @@ Local dev connects to your **remote** Supabase project (no Docker required). All
 
 ## Files that matter
 
-| Path | Purpose |
-|---|---|
-| `supabase/migrations/` | Versioned SQL. Source of truth for schema. |
-| `supabase/config.toml` | Project ID + auth/storage settings. |
+| Path                         | Purpose                                                                             |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `supabase/migrations/`       | Versioned SQL. Source of truth for schema.                                          |
+| `supabase/config.toml`       | Project ID + auth/storage settings.                                                 |
 | `src/integrations/supabase/` | Browser/server/admin clients + auth middleware. **Do not edit `types.ts` by hand.** |
-| `src/lib/*.functions.ts` | TanStack server functions (Vercel serverless). |
-| `src/routes/api/public/*` | Public HTTP endpoints (webhooks, cron). None today. |
-| `vite.config.ts` | Vanilla TanStack Start config. |
-| `.env` | Local env vars (gitignored in real projects — rotate the values you commit). |
+| `src/lib/*.functions.ts`     | TanStack server functions (Vercel serverless).                                      |
+| `src/routes/api/public/*`    | Public HTTP endpoints (webhooks, cron). None today.                                 |
+| `vite.config.ts`             | Vanilla TanStack Start config.                                                      |
+| `.env`                       | Local env vars (gitignored in real projects — rotate the values you commit).        |

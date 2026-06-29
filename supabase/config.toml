@@ -6,6 +6,8 @@ additional_redirect_urls = ["http://localhost:8080/**"]
 jwt_expiry = 3600
 enable_signup = true
 enable_anonymous_sign_ins = false
+minimum_password_length = 8
+password_requirements = ""
 
 [auth.email]
 enable_signup = true
@@ -13,11 +15,6 @@ double_confirm_changes = true
 enable_confirmations = false
 secure_password_change = true
 max_frequency = "1m"
-
-# Have I Been Pwned password check
-[auth.email.password]
-min_length = 8
-required_characters = ""
 
 [auth.external.google]
 enabled = true
@@ -30,8 +27,7 @@ skip_nonce_check = false
 enabled = true
 file_size_limit = "50MiB"
 
-[[storage.buckets]]
-name = "school-assets"
+[storage.buckets.school-assets]
 public = false
 file_size_limit = "10MiB"
 allowed_mime_types = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"]

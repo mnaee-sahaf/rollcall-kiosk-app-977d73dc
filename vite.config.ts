@@ -3,6 +3,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
+import { nitro } from "nitro/vite";
 
 // Standalone TanStack Start config — no Lovable wrapper.
 //
@@ -26,8 +27,8 @@ export default defineConfig({
       // Override server entry so SSR errors render our custom error page.
       start: { entry: "./src/server.ts" },
     }),
+    nitro(),
     viteReact(),
-
   ],
   resolve: {
     dedupe: ["react", "react-dom", "@tanstack/react-router", "@tanstack/react-start"],
