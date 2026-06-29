@@ -9,6 +9,7 @@ import {
   Upload,
   UserSquare2,
   Menu,
+  Mail,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/landing/Logo";
@@ -65,6 +66,9 @@ export function AppShell({
           </Link>
           <Link to="/app/import" className={linkClass(pathname.startsWith("/app/import"))}>
             <Upload className="h-4 w-4" /> Bulk import
+          </Link>
+          <Link to="/app/waitlist" className={linkClass(pathname.startsWith("/app/waitlist"))}>
+            <Mail className="h-4 w-4" /> Waitlist
           </Link>
           <Link to="/app/settings" className={linkClass(pathname.startsWith("/app/settings"))}>
             <Settings className="h-4 w-4" /> Settings
