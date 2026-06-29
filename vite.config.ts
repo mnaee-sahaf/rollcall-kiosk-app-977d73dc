@@ -23,11 +23,11 @@ export default defineConfig({
     tsConfigPaths(),
     tailwindcss(),
     tanstackStart({
-      customViteReactPlugin: true,
       // Override server entry so SSR errors render our custom error page.
       start: { entry: "./src/server.ts" },
     }),
     viteReact(),
+
   ],
   resolve: {
     dedupe: ["react", "react-dom", "@tanstack/react-router", "@tanstack/react-start"],
