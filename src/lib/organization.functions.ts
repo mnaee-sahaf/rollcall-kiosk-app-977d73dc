@@ -19,46 +19,12 @@ export const createOrganization = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // #region agent log
-    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
-      body: JSON.stringify({
-        sessionId: "312363",
-        runId: "initial-audit",
-        hypothesisId: "H5,H6",
-        location: "src/lib/organization.functions.ts:createOrganization:start",
-        message: "Create organization handler started",
-        data: { hasUserId: Boolean(userId), schoolNameLength: data.schoolName.length },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
 
     // Block if user already has any role.
     const { data: existingRoles, error: existingRolesErr } = await supabaseAdmin
       .from("user_roles")
       .select("role")
       .eq("user_id", userId);
-    // #region agent log
-    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
-      body: JSON.stringify({
-        sessionId: "312363",
-        runId: "initial-audit",
-        hypothesisId: "H6",
-        location: "src/lib/organization.functions.ts:createOrganization:existingRoles",
-        message: "Create organization existing roles query result",
-        data: {
-          rowCount: existingRoles?.length ?? null,
-          errorCode: existingRolesErr?.code,
-          errorMessage: existingRolesErr?.message,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     if (existingRolesErr) throw new Error(existingRolesErr.message);
     if (existingRoles && existingRoles.length > 0) {
       throw new Error("You already belong to an organization.");
@@ -70,25 +36,6 @@ export const createOrganization = createServerFn({ method: "POST" })
       .select("user_id")
       .eq("role", "admin")
       .limit(1);
-    // #region agent log
-    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
-      body: JSON.stringify({
-        sessionId: "312363",
-        runId: "initial-audit",
-        hypothesisId: "H6",
-        location: "src/lib/organization.functions.ts:createOrganization:anyAdmin",
-        message: "Create organization admin existence query result",
-        data: {
-          rowCount: anyAdmin?.length ?? null,
-          errorCode: anyAdminErr?.code,
-          errorMessage: anyAdminErr?.message,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     if (anyAdminErr) throw new Error(anyAdminErr.message);
     if (anyAdmin && anyAdmin.length > 0) {
       throw new Error("An organization already exists. Ask your admin for an invite.");

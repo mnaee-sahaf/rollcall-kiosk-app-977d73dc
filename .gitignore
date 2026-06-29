@@ -10,6 +10,12 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+
+# Local env — never commit real keys. Use .env.example as the template.
+.env
+.env.*
+!.env.example
+
 .output
 .vercel
 .vinxi

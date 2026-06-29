@@ -39,21 +39,6 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    // #region agent log
-    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
-      body: JSON.stringify({
-        sessionId: "312363",
-        runId: "initial-audit",
-        hypothesisId: "H5",
-        location: "src/routes/__root.tsx:ErrorComponent",
-        message: "Root error boundary rendered",
-        data: { name: error.name, message: error.message, path: window.location.pathname },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
@@ -137,40 +122,10 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    // #region agent log
-    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
-      body: JSON.stringify({
-        sessionId: "312363",
-        runId: "initial-audit",
-        hypothesisId: "H1,H3",
-        location: "src/routes/__root.tsx:RootComponent",
-        message: "Root component mounted",
-        data: { path: window.location.pathname, host: window.location.host, title: document.title },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     let mounted = true;
     import("@/integrations/supabase/client").then(({ supabase }) => {
       if (!mounted) return;
       const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-        // #region agent log
-        fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
-          body: JSON.stringify({
-            sessionId: "312363",
-            runId: "initial-audit",
-            hypothesisId: "H3",
-            location: "src/routes/__root.tsx:onAuthStateChange",
-            message: "Supabase auth state changed",
-            data: { event, path: window.location.pathname },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
         router.invalidate();
         if (event !== "SIGNED_OUT") queryClient.invalidateQueries();

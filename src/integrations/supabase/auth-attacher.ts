@@ -8,21 +8,6 @@ export const attachSupabaseAuth = createMiddleware({ type: "function" }).client(
   async ({ next }) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    // #region agent log
-    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
-      body: JSON.stringify({
-        sessionId: "312363",
-        runId: "initial-audit",
-        hypothesisId: "H3,H4",
-        location: "src/integrations/supabase/auth-attacher.ts:attachSupabaseAuth",
-        message: "Attaching Supabase auth to server function",
-        data: { hasSession: Boolean(data.session), hasToken: Boolean(token) },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return next({
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });

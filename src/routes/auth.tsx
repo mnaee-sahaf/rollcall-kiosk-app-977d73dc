@@ -88,22 +88,6 @@ function AuthPage() {
     }
   }
 
-  async function handleGoogle() {
-    // Remember intended destination so /auth/callback can return there.
-    sessionStorage.setItem("postLoginRedirect", invite ? "/app" : "/welcome");
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    if (error) {
-      toast.error(error.message ?? "Google sign-in failed");
-    }
-    // On success the browser navigates away to Google.
-  }
-
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#fcfbf8] px-4">
       <div className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm">
@@ -173,13 +157,6 @@ function AuthPage() {
                   : "Create organization"}
           </Button>
         </form>
-
-        <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
-          <div className="h-px flex-1 bg-border" /> or <div className="h-px flex-1 bg-border" />
-        </div>
-        <Button variant="outline" className="w-full" onClick={handleGoogle} type="button">
-          Continue with Google
-        </Button>
 
         {mode === "signin" && (
           <>
