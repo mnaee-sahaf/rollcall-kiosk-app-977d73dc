@@ -35,6 +35,42 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 function createSupabaseAdminClient() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseHost = (() => {
+    if (!SUPABASE_URL) return null;
+    try {
+      return new URL(SUPABASE_URL).host;
+    } catch {
+      return "invalid-url";
+    }
+  })();
+  const serviceKeyKind = SUPABASE_SERVICE_ROLE_KEY?.startsWith("sb_secret_")
+    ? "secret"
+    : SUPABASE_SERVICE_ROLE_KEY?.split(".").length === 3
+      ? "jwt-or-legacy"
+      : SUPABASE_SERVICE_ROLE_KEY
+        ? "unrecognized"
+        : "missing";
+
+  // #region agent log
+  fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
+    body: JSON.stringify({
+      sessionId: "312363",
+      runId: "initial-audit",
+      hypothesisId: "H2,H5,H6",
+      location: "src/integrations/supabase/client.server.ts:createSupabaseAdminClient",
+      message: "Creating server Supabase admin client",
+      data: {
+        hasUrl: Boolean(SUPABASE_URL),
+        hasServiceRoleKey: Boolean(SUPABASE_SERVICE_ROLE_KEY),
+        supabaseHost,
+        serviceKeyKind,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     const missing = [

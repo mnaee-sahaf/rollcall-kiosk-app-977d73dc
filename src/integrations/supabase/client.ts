@@ -35,6 +35,41 @@ function createSupabaseClient() {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const SUPABASE_PUBLISHABLE_KEY =
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  const supabaseHost = (() => {
+    if (!SUPABASE_URL) return null;
+    try {
+      return new URL(SUPABASE_URL).host;
+    } catch {
+      return "invalid-url";
+    }
+  })();
+  const keyKind = SUPABASE_PUBLISHABLE_KEY?.startsWith("sb_publishable_")
+    ? "publishable"
+    : SUPABASE_PUBLISHABLE_KEY
+      ? "jwt-or-legacy"
+      : "missing";
+
+  // #region agent log
+  fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
+    body: JSON.stringify({
+      sessionId: "312363",
+      runId: "initial-audit",
+      hypothesisId: "H2,H3",
+      location: "src/integrations/supabase/client.ts:createSupabaseClient",
+      message: "Creating browser Supabase client",
+      data: {
+        hasUrl: Boolean(SUPABASE_URL),
+        hasPublishableKey: Boolean(SUPABASE_PUBLISHABLE_KEY),
+        supabaseHost,
+        keyKind,
+        isBrowser: typeof window !== "undefined",
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [

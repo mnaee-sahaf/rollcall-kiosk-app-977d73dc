@@ -35,6 +35,24 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
   async ({ next }) => {
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
+    // #region agent log
+    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
+      body: JSON.stringify({
+        sessionId: "312363",
+        runId: "initial-audit",
+        hypothesisId: "H2,H4,H5",
+        location: "src/integrations/supabase/auth-middleware.ts:env",
+        message: "Server auth middleware env check",
+        data: {
+          hasUrl: Boolean(SUPABASE_URL),
+          hasPublishableKey: Boolean(SUPABASE_PUBLISHABLE_KEY),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
 
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
       const missing = [
@@ -53,6 +71,25 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
     }
 
     const authHeader = request.headers.get("authorization");
+    // #region agent log
+    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
+      body: JSON.stringify({
+        sessionId: "312363",
+        runId: "initial-audit",
+        hypothesisId: "H4,H5",
+        location: "src/integrations/supabase/auth-middleware.ts:authHeader",
+        message: "Server auth middleware received auth header",
+        data: {
+          hasRequest: Boolean(request),
+          hasAuthHeader: Boolean(authHeader),
+          startsWithBearer: Boolean(authHeader?.startsWith("Bearer ")),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
 
     if (!authHeader) {
       throw new Error("Unauthorized: No authorization header provided");
@@ -86,6 +123,26 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
     });
 
     const { data, error } = await supabase.auth.getClaims(token);
+    // #region agent log
+    fetch("http://127.0.0.1:7889/ingest/0a08333b-87b1-45a1-b963-61b11a44954b", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "312363" },
+      body: JSON.stringify({
+        sessionId: "312363",
+        runId: "initial-audit",
+        hypothesisId: "H5",
+        location: "src/integrations/supabase/auth-middleware.ts:getClaims",
+        message: "Server auth middleware claim validation result",
+        data: {
+          hasClaims: Boolean(data?.claims),
+          hasSub: Boolean(data?.claims?.sub),
+          errorName: error?.name,
+          errorMessage: error?.message,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     if (error || !data?.claims) {
       throw new Error("Unauthorized: Invalid token");
     }
