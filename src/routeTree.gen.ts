@@ -20,6 +20,7 @@ import { Route as LookupQrTokenRouteImport } from './routes/lookup.$qrToken'
 import { Route as KioskTokenRouteImport } from './routes/kiosk.$token'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/app.index'
+import { Route as AuthenticatedAppWaitlistRouteImport } from './routes/_authenticated/app.waitlist'
 import { Route as AuthenticatedAppTeachersRouteImport } from './routes/_authenticated/app.teachers'
 import { Route as AuthenticatedAppStudentsRouteImport } from './routes/_authenticated/app.students'
 import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/app.settings'
@@ -85,6 +86,12 @@ const AuthenticatedAppIndexRoute = AuthenticatedAppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppWaitlistRoute =
+  AuthenticatedAppWaitlistRouteImport.update({
+    id: '/waitlist',
+    path: '/waitlist',
+    getParentRoute: () => AuthenticatedAppRoute,
+  } as any)
 const AuthenticatedAppTeachersRoute =
   AuthenticatedAppTeachersRouteImport.update({
     id: '/teachers',
@@ -160,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/app/students': typeof AuthenticatedAppStudentsRoute
   '/app/teachers': typeof AuthenticatedAppTeachersRoute
+  '/app/waitlist': typeof AuthenticatedAppWaitlistRoute
   '/app/': typeof AuthenticatedAppIndexRoute
   '/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
   '/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
@@ -181,6 +189,7 @@ export interface FileRoutesByTo {
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/app/students': typeof AuthenticatedAppStudentsRoute
   '/app/teachers': typeof AuthenticatedAppTeachersRoute
+  '/app/waitlist': typeof AuthenticatedAppWaitlistRoute
   '/app': typeof AuthenticatedAppIndexRoute
   '/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
   '/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
@@ -205,6 +214,7 @@ export interface FileRoutesById {
   '/_authenticated/app/settings': typeof AuthenticatedAppSettingsRoute
   '/_authenticated/app/students': typeof AuthenticatedAppStudentsRoute
   '/_authenticated/app/teachers': typeof AuthenticatedAppTeachersRoute
+  '/_authenticated/app/waitlist': typeof AuthenticatedAppWaitlistRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
   '/_authenticated/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
   '/_authenticated/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
@@ -229,6 +239,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/students'
     | '/app/teachers'
+    | '/app/waitlist'
     | '/app/'
     | '/app/classes/$classId'
     | '/app/invite/$token'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/students'
     | '/app/teachers'
+    | '/app/waitlist'
     | '/app'
     | '/app/classes/$classId'
     | '/app/invite/$token'
@@ -273,6 +285,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/settings'
     | '/_authenticated/app/students'
     | '/_authenticated/app/teachers'
+    | '/_authenticated/app/waitlist'
     | '/_authenticated/app/'
     | '/_authenticated/app/classes/$classId'
     | '/_authenticated/app/invite/$token'
@@ -368,6 +381,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/app/'
       preLoaderRoute: typeof AuthenticatedAppIndexRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/_authenticated/app/waitlist': {
+      id: '/_authenticated/app/waitlist'
+      path: '/waitlist'
+      fullPath: '/app/waitlist'
+      preLoaderRoute: typeof AuthenticatedAppWaitlistRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
     '/_authenticated/app/teachers': {
@@ -481,6 +501,7 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppSettingsRoute: typeof AuthenticatedAppSettingsRoute
   AuthenticatedAppStudentsRoute: typeof AuthenticatedAppStudentsRoute
   AuthenticatedAppTeachersRoute: typeof AuthenticatedAppTeachersRoute
+  AuthenticatedAppWaitlistRoute: typeof AuthenticatedAppWaitlistRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
   AuthenticatedAppInviteTokenRoute: typeof AuthenticatedAppInviteTokenRoute
 }
@@ -493,6 +514,7 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppSettingsRoute: AuthenticatedAppSettingsRoute,
   AuthenticatedAppStudentsRoute: AuthenticatedAppStudentsRoute,
   AuthenticatedAppTeachersRoute: AuthenticatedAppTeachersRoute,
+  AuthenticatedAppWaitlistRoute: AuthenticatedAppWaitlistRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
   AuthenticatedAppInviteTokenRoute: AuthenticatedAppInviteTokenRoute,
 }
