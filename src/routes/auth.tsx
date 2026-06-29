@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Logo } from "@/components/landing/Logo";
+
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -85,15 +85,20 @@ function AuthPage() {
   }
 
   async function handleGoogle() {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/welcome",
+    // Remember intended destination so /auth/callback can return there.
+    sessionStorage.setItem("postLoginRedirect", invite ? "/app" : "/welcome");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
-    if (result.error) {
-      toast.error(result.error.message ?? "Google sign-in failed");
-      return;
+    if (error) {
+      toast.error(error.message ?? "Google sign-in failed");
     }
-    if (!result.redirected) navigate({ to: "/welcome" });
+    // On success the browser navigates away to Google.
   }
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#fcfbf8] px-4">
