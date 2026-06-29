@@ -277,7 +277,7 @@ function DemoPage() {
         onClose={() => setScanOpen(false)}
         students={students}
         sessions={sessions}
-        onScan={(classId, studentId) => setStatus(classId, studentId, "present")}
+        onScan={(classId: string, studentId: string) => setStatus(classId, studentId, "present")}
       />
 
       {/* Class drill-down sheet */}
