@@ -10,12 +10,15 @@ import { Logo } from "@/components/landing/Logo";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
-  validateSearch: (s: Record<string, unknown>) => ({
-    invite: typeof s.invite === "string" ? s.invite : undefined,
-    mode: s.mode === "signup" ? "signup" : "signin",
-  }),
+  validateSearch: (s: Record<string, unknown>): { invite?: string; mode?: "signup" | "signin" } => {
+    const out: { invite?: string; mode?: "signup" | "signin" } = {};
+    if (typeof s.invite === "string") out.invite = s.invite;
+    if (s.mode === "signup" || s.mode === "signin") out.mode = s.mode;
+    return out;
+  },
   component: AuthPage,
 });
+
 
 
 function AuthPage() {
