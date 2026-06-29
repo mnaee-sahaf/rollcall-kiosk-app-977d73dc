@@ -5,8 +5,14 @@ import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 
 // Standalone TanStack Start config — no Lovable wrapper.
-// Targets Vercel via Nitro's vercel preset. For local dev or other
-// providers, change `target` (e.g. "node-server", "cloudflare-module").
+//
+// Deploy target: set the Nitro preset via env var on the host.
+//   Vercel:      NITRO_PRESET=vercel        (set automatically by Vercel)
+//   Cloudflare:  NITRO_PRESET=cloudflare-module
+//   Node:        NITRO_PRESET=node-server
+//   Netlify:     NITRO_PRESET=netlify
+// In Vercel project settings, Vercel auto-detects and sets this; you usually
+// don't need to add it manually.
 export default defineConfig({
   server: {
     host: "::",
@@ -17,10 +23,9 @@ export default defineConfig({
     tsConfigPaths(),
     tailwindcss(),
     tanstackStart({
-      target: "vercel",
       customViteReactPlugin: true,
-      // Override default server entry so SSR errors render our pretty page.
-      server: { entry: "./src/server.ts" },
+      // Override server entry so SSR errors render our custom error page.
+      start: { entry: "./src/server.ts" },
     }),
     viteReact(),
   ],
