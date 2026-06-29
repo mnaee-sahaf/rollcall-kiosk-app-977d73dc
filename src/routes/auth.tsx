@@ -1,27 +1,31 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Logo } from "@/components/landing/Logo";
 
+
 export const Route = createFileRoute("/auth")({
   ssr: false,
-  validateSearch: (s: Record<string, unknown>) => ({
-    invite: typeof s.invite === "string" ? s.invite : undefined,
-    mode: s.mode === "signup" ? "signup" : "signin",
-  }),
+  validateSearch: (s: Record<string, unknown>): { invite?: string; mode?: "signup" | "signin" } => {
+    const out: { invite?: string; mode?: "signup" | "signin" } = {};
+    if (typeof s.invite === "string") out.invite = s.invite;
+    if (s.mode === "signup" || s.mode === "signin") out.mode = s.mode;
+    return out;
+  },
   component: AuthPage,
 });
+
 
 
 function AuthPage() {
   const navigate = useNavigate();
   const { invite, mode: initialMode } = Route.useSearch();
-  const [mode, setMode] = useState<"signin" | "signup">(initialMode);
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? "signin");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -85,15 +89,20 @@ function AuthPage() {
   }
 
   async function handleGoogle() {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/welcome",
+    // Remember intended destination so /auth/callback can return there.
+    sessionStorage.setItem("postLoginRedirect", invite ? "/app" : "/welcome");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
-    if (result.error) {
-      toast.error(result.error.message ?? "Google sign-in failed");
-      return;
+    if (error) {
+      toast.error(error.message ?? "Google sign-in failed");
     }
-    if (!result.redirected) navigate({ to: "/welcome" });
+    // On success the browser navigates away to Google.
   }
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#fcfbf8] px-4">

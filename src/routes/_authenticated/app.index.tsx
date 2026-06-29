@@ -26,11 +26,12 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app/")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    welcome: s.welcome ? 1 : undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>): { welcome?: 1 } => {
+    return s.welcome ? { welcome: 1 } : {};
+  },
   component: DashboardPage,
 });
+
 
 type Ctx = Awaited<ReturnType<typeof getMyContext>>;
 
