@@ -112,25 +112,31 @@ function CreateOrgWizard() {
   const [referralSource, setReferralSource] = useState("");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (!data.user) {
+          navigate({ to: "/auth", search: { mode: "signin", invite: undefined }, replace: true });
+          return;
+        }
+        setAuthEmail(data.user.email ?? null);
+        return fetchCtx({}).then((c) => {
+          if (c.hasRole) {
+            navigate({ to: "/app", replace: true });
+            return;
+          }
+          if (c.orgExists) {
+            toast.error("An organization already exists. Ask your admin for an invite.");
+            navigate({ to: "/welcome" });
+            return;
+          }
+          setReady(true);
+        });
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Could not load your account");
         navigate({ to: "/auth", search: { mode: "signin", invite: undefined }, replace: true });
-        return;
-      }
-      setAuthEmail(data.user.email ?? null);
-      fetchCtx({}).then((c) => {
-        if (c.hasRole) {
-          navigate({ to: "/app", replace: true });
-          return;
-        }
-        if (c.orgExists) {
-          toast.error("An organization already exists. Ask your admin for an invite.");
-          navigate({ to: "/welcome" });
-          return;
-        }
-        setReady(true);
       });
-    });
   }, [fetchCtx, navigate]);
 
   async function handleSignOut() {

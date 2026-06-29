@@ -24,8 +24,12 @@ export default defineConfig({
     tsConfigPaths(),
     tailwindcss(),
     tanstackStart({
-      // Override server entry so SSR errors render our custom error page.
-      start: { entry: "./src/server.ts" },
+      // Override the server entry so SSR errors render our custom error page.
+      // NOTE: this MUST be `server.entry`, not `start.entry`. `start.entry` points
+      // at the start-instance file (src/start.ts) that registers global function
+      // middleware (attachSupabaseAuth); pointing it here drops the Authorization
+      // header from every server-function call (e.g. getJoinContext on /welcome).
+      server: { entry: "./src/server.ts" },
     }),
     nitro(),
     viteReact(),

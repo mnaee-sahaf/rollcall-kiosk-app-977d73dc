@@ -25,21 +25,29 @@ function WelcomePage() {
   const [authEmail, setAuthEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        navigate({ to: "/auth", search: { mode: "signin", invite: undefined }, replace: true });
-        return;
-      }
-      setAuthEmail(data.user.email ?? null);
-      fetchCtx({}).then((c) => {
-        // If the user already has a role, skip the welcome screen.
-        if (c.hasRole) {
-          navigate({ to: "/app", replace: true });
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (!data.user) {
+          navigate({ to: "/auth", search: { mode: "signin", invite: undefined }, replace: true });
           return;
         }
-        setCtx(c);
+        setAuthEmail(data.user.email ?? null);
+        return fetchCtx({}).then((c) => {
+          // If the user already has a role, skip the welcome screen.
+          if (c.hasRole) {
+            navigate({ to: "/app", replace: true });
+            return;
+          }
+          setCtx(c);
+        });
+      })
+      .catch((err) => {
+        // Never leave the user on a blank "Loading…" screen — surface the error
+        // and send them back to sign in (e.g. an expired/missing session).
+        toast.error(err instanceof Error ? err.message : "Could not load your account");
+        navigate({ to: "/auth", search: { mode: "signin", invite: undefined }, replace: true });
       });
-    });
   }, [fetchCtx, navigate]);
 
   async function handleAccept(token: string) {
