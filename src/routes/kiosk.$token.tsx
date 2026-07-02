@@ -14,6 +14,20 @@ export const Route = createFileRoute("/kiosk/$token")({
 type BoardData = Awaited<ReturnType<typeof getKioskBoard>>;
 type Flash = { name: string; ok: boolean; msg?: string } | null;
 
+// Turn a getUserMedia / html5-qrcode failure into staff-readable guidance.
+function cameraErrorMessage(e: unknown): string {
+  const name = typeof e === "object" && e && "name" in e ? String((e as { name: unknown }).name) : "";
+  const raw = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+  const text = `${name} ${raw}`.toLowerCase();
+  if (text.includes("notallowed") || text.includes("permission") || text.includes("denied"))
+    return "Camera access was blocked. Allow camera permission for this site, then tap Start camera again.";
+  if (text.includes("notfound") || text.includes("no camera") || text.includes("devices"))
+    return "No camera was found on this device.";
+  if (text.includes("notreadable") || text.includes("inuse") || text.includes("track start"))
+    return "The camera is already in use by another app. Close it and tap Start camera again.";
+  return "Could not start the camera. Check permissions and try again.";
+}
+
 function KioskPage() {
   const { token } = Route.useParams();
   const fBoard = useServerFn(getKioskBoard);
@@ -24,6 +38,7 @@ function KioskPage() {
     Array<{ name: string; ok: boolean; msg?: string; at: number }>
   >([]);
   const [flash, setFlash] = useState<Flash>(null);
+  const [camError, setCamError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastScanRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,6 +63,7 @@ function KioskPage() {
     if (scannerRef.current) return;
     const el = document.getElementById("qr-reader");
     if (!el) return;
+    setCamError(null);
     const scanner = new Html5Qrcode("qr-reader");
     scannerRef.current = scanner;
     try {
@@ -85,6 +101,7 @@ function KioskPage() {
     } catch (e) {
       console.error(e);
       scannerRef.current = null;
+      setCamError(cameraErrorMessage(e));
     }
   }
 
@@ -171,6 +188,11 @@ function KioskPage() {
           {insecure && (
             <p className="mt-3 text-xs text-amber-300 max-w-sm text-center">
               Camera access requires HTTPS. Open this kiosk URL over https:// or on localhost.
+            </p>
+          )}
+          {camError && (
+            <p className="mt-3 text-sm text-rose-300 max-w-sm text-center" role="alert">
+              {camError}
             </p>
           )}
           <p className="mt-4 text-sm text-white/60 text-center max-w-sm">
