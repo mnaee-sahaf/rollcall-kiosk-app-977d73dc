@@ -41,6 +41,22 @@ export const createOrganization = createServerFn({ method: "POST" })
       throw new Error("An organization already exists. Ask your admin for an invite.");
     }
 
+    // Claim the admin role FIRST. The user_roles_single_admin partial unique
+    // index makes this the atomic gate: if a concurrent setup already became
+    // admin between our check above and here, this insert fails with a unique
+    // violation (Postgres 23505) instead of silently minting a second admin.
+    // Doing it before the settings write also means the loser bails out
+    // before clobbering school_settings.
+    const { error: roleErr } = await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: userId, role: "admin" });
+    if (roleErr) {
+      if (roleErr.code === "23505") {
+        throw new Error("An organization already exists. Ask your admin for an invite.");
+      }
+      throw new Error(roleErr.message);
+    }
+
     const { error: updateErr } = await supabaseAdmin
       .from("school_settings")
       .update({
@@ -57,11 +73,6 @@ export const createOrganization = createServerFn({ method: "POST" })
       })
       .eq("singleton", true);
     if (updateErr) throw new Error(updateErr.message);
-
-    const { error: roleErr } = await supabaseAdmin
-      .from("user_roles")
-      .insert({ user_id: userId, role: "admin" });
-    if (roleErr) throw new Error(roleErr.message);
 
     return { ok: true };
   });
