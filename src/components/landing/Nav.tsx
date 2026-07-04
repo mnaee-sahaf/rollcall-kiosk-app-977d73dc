@@ -17,13 +17,13 @@ export function Nav() {
         </nav>
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" size="sm">
-            <Link to="/auth" search={{ mode: "signin", invite: undefined }}>Sign in</Link>
+            <Link to="/auth">Sign in</Link>
           </Button>
           <Button asChild variant="ghost" size="sm">
             <Link to="/demo">Try the demo</Link>
           </Button>
           <Button asChild size="sm">
-            <Link to="/auth" search={{ mode: "signup", invite: undefined }}>Create organization</Link>
+            <Link to="/signup">Create organization</Link>
           </Button>
         </div>
       </div>

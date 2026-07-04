@@ -1,86 +1,57 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { orgExists } from "@/lib/organization.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Logo } from "@/components/landing/Logo";
 
-
 export const Route = createFileRoute("/auth")({
   ssr: false,
-  validateSearch: (s: Record<string, unknown>): { invite?: string; mode?: "signup" | "signin" } => {
-    const out: { invite?: string; mode?: "signup" | "signin" } = {};
-    if (typeof s.invite === "string") out.invite = s.invite;
-    if (s.mode === "signup" || s.mode === "signin") out.mode = s.mode;
-    return out;
-  },
   component: AuthPage,
 });
 
-
-
 function AuthPage() {
   const navigate = useNavigate();
-  const { invite, mode: initialMode } = Route.useSearch();
-  const [mode, setMode] = useState<"signin" | "signup">(initialMode ?? "signin");
-
+  const fOrgExists = useServerFn(orgExists);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
+  const [canCreateOrg, setCanCreateOrg] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) return;
-      // If already signed in and just trying to sign in, send them straight to the app.
-      if (mode === "signin" && !invite) {
-        navigate({ to: "/app", replace: true });
-        return;
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (data.user) {
+        const { data: roles } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", data.user.id);
+        if ((roles ?? []).length > 0) {
+          navigate({ to: "/app", replace: true });
+          return;
+        }
       }
-      setCurrentEmail(data.user.email ?? null);
+      // Offer org creation only while no organization exists yet.
+      try {
+        const { exists } = await fOrgExists({});
+        setCanCreateOrg(!exists);
+      } catch {
+        /* leave hidden on error */
+      }
     });
-  }, [mode, invite, navigate]);
-
-  useEffect(() => {
-    if (invite) setMode("signup");
-  }, [invite]);
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    setCurrentEmail(null);
-  }
-
+  }, [navigate, fOrgExists]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        toast.success("Signed in");
-        navigate({ to: "/app" });
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/welcome`,
-            data: {
-              full_name: fullName,
-              invite_token: invite,
-            },
-          },
-        });
-        if (error) throw error;
-        toast.success("Account created");
-        // Invited teachers get a role from the trigger and can go straight to /app.
-        // Everyone else picks Create vs Join on /welcome.
-        navigate({ to: invite ? "/app" : "/welcome" });
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      toast.success("Signed in");
+      navigate({ to: "/app" });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -94,47 +65,17 @@ function AuthPage() {
         <div className="mb-6 flex justify-center">
           <Logo />
         </div>
-        <h1 className="text-2xl font-bold text-center">
-          {mode === "signin"
-            ? "Sign in"
-            : invite
-              ? "Accept teacher invite"
-              : "Create your account"}
-        </h1>
-        {mode === "signup" && !invite && (
-          <p className="mt-2 text-center text-sm text-muted-foreground">
-            One quick account, then choose whether to start a new organization or join one.
-          </p>
-        )}
-        {invite && (
-          <p className="mt-2 text-center text-sm text-muted-foreground">
-            You're joining as a teacher.
-          </p>
-        )}
-        {currentEmail && (
-          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            You're already signed in as <span className="font-medium">{currentEmail}</span>.{" "}
-            <button type="button" className="underline" onClick={handleSignOut}>
-              Sign out
-            </button>{" "}
-            to use a different account, or{" "}
-            <button type="button" className="underline" onClick={() => navigate({ to: "/app" })}>
-              go to your dashboard
-            </button>
-            .
-          </div>
-        )}
-
+        <h1 className="text-2xl font-bold text-center">Sign in</h1>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          {mode === "signup" && (
-            <div>
-              <Label htmlFor="name">Full name</Label>
-              <Input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-            </div>
-          )}
           <div>
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
           <div>
             <Label htmlFor="password">Password</Label>
@@ -144,48 +85,29 @@ function AuthPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading
-              ? "Please wait…"
-              : mode === "signin"
-                ? "Sign in"
-                : invite
-                  ? "Accept invite"
-                  : "Create organization"}
+            {loading ? "Please wait…" : "Sign in"}
           </Button>
         </form>
 
-        {mode === "signin" && (
+        {canCreateOrg && (
           <>
             <div className="my-6 h-px bg-border" />
             <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-3">
-                New to Jibble RollCall?
-              </p>
+              <p className="text-sm text-muted-foreground mb-3">New to Jibble RollCall?</p>
               <Button
                 type="button"
                 variant="secondary"
                 className="w-full"
-                onClick={() => setMode("signup")}
+                onClick={() => navigate({ to: "/signup" })}
               >
-                Create an organization account
+                Create your organization
               </Button>
             </div>
           </>
         )}
-
-        {mode === "signup" && (
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Already have one?{" "}
-            <button className="text-primary underline" onClick={() => setMode("signin")} type="button">
-              Sign in
-            </button>
-          </p>
-        )}
-
       </div>
     </div>
   );
