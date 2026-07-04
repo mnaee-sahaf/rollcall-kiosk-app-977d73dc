@@ -14,8 +14,10 @@ export const Route = createFileRoute("/_authenticated")({
       .select("role")
       .eq("user_id", data.user.id);
     const hasRole = (roles ?? []).length > 0;
-    if (!hasRole && !location.pathname.startsWith("/welcome")) {
-      throw redirect({ to: "/welcome" });
+    // Role-less users go to /signup: a mid-signup admin finishes creating the
+    // org there; a stale account (org already exists) gets a dead-end message.
+    if (!hasRole) {
+      throw redirect({ to: "/signup" });
     }
 
     // Teachers created by an admin get a temp password and must set their own

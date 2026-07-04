@@ -38,7 +38,6 @@ import {
   Upload,
   Copy,
   Plus,
-  Trash2,
   ExternalLink,
   Printer,
   MonitorSmartphone,
@@ -48,7 +47,6 @@ import {
   X,
   ChevronRight,
   Settings as SettingsIcon,
-  Mail,
   HelpCircle,
   AlertCircle,
 } from "lucide-react";
