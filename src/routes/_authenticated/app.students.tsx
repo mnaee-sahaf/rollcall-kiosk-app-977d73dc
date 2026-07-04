@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { Search, Printer, History, MoreVertical, Mail } from "lucide-react";
+import { Search, Printer, History, MoreVertical } from "lucide-react";
 import { QrHistoryDrawer } from "@/components/students/QrHistoryDrawer";
 import { StickerSheetDialog } from "@/components/students/StickerSheetDialog";
 
@@ -259,13 +259,6 @@ function AllStudentsPage() {
                       >
                         <Printer className="h-4 w-4 mr-2" />
                         Print sticker
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled
-                        className="opacity-60"
-                      >
-                        <Mail className="h-4 w-4 mr-2" />
-                        Email to parent (soon)
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-rose-600 focus:text-rose-700"

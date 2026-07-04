@@ -163,7 +163,7 @@ function AuthPage() {
             <div className="my-6 h-px bg-border" />
             <div className="text-center">
               <p className="text-sm text-muted-foreground mb-3">
-                New to RollCall?
+                New to Jibble RollCall?
               </p>
               <Button
                 type="button"

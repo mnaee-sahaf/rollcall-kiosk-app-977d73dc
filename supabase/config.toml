@@ -16,13 +16,6 @@ enable_confirmations = false
 secure_password_change = true
 max_frequency = "1m"
 
-[auth.external.google]
-enabled = true
-client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
-secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
-redirect_uri = ""
-skip_nonce_check = false
-
 [storage]
 enabled = true
 file_size_limit = "50MiB"

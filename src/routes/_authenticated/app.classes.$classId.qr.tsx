@@ -81,7 +81,7 @@ function QrSheetPage() {
             >
               {logoUrl && <img src={logoUrl} alt="" className="h-6 mb-1 object-contain" />}
               <div className="text-[10px] uppercase text-muted-foreground mb-1">
-                {schoolName ?? "RollCall"}
+                {schoolName ?? "Jibble RollCall"}
               </div>
               <div
                 dangerouslySetInnerHTML={{ __html: c.qrSvg }}

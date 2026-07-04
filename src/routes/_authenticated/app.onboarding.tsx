@@ -599,8 +599,7 @@ function StepSchool({ onDone }: { onDone: () => void }) {
     <StepShell
       title="Attendance settings"
       minutes={2}
-      description="Set how RollCall tracks late and absent students, and add a logo for kiosks and printed QR sheets."
-      learnMore={{ label: "Learn how attendance windows work", href: "#" }}
+      description="Set how Jibble RollCall tracks late and absent students, and add a logo for kiosks and printed QR sheets."
       footer={
         <>
           <span className="text-xs text-muted-foreground">Step 1 of 4</span>
@@ -795,7 +794,6 @@ function StepTeachers({
       title="Invite teachers"
       minutes={5}
       description="Send invite links so teachers can sign in and run attendance for their own classes. You can always add more later."
-      learnMore={{ label: "Learn about teacher roles", href: "#" }}
       footer={
         <>
           <Button variant="ghost" onClick={onBack}>
@@ -894,9 +892,9 @@ function StepTeachers({
                 <a
                   className="inline-flex items-center gap-1 rounded-md border bg-white px-2.5 py-1.5 text-xs hover:bg-muted"
                   href={`mailto:${s.email}?subject=${encodeURIComponent(
-                    "Your RollCall invite",
+                    "Your Jibble RollCall invite",
                   )}&body=${encodeURIComponent(
-                    `You've been invited to RollCall. Accept here: ${s.link}`,
+                    `You've been invited to Jibble RollCall. Accept here: ${s.link}`,
                   )}`}
                 >
                   <Mail className="h-3 w-3" /> Email
@@ -1001,7 +999,6 @@ function StepClass({
       title="Create your first class"
       minutes={3}
       description="A class groups students together and gets its own kiosk session. You can create more anytime."
-      learnMore={{ label: "Learn about classes & kiosks", href: "#" }}
       footer={
         <>
           <Button variant="ghost" onClick={onBack}>
@@ -1187,7 +1184,6 @@ function StepStudentsAndTry({
       title="Add students & try it out"
       minutes={5}
       description="Add your roster, print QR cards, then open a kiosk to see attendance in action."
-      learnMore={{ label: "Learn about QR codes & kiosks", href: "#" }}
       footer={
         <>
           <Button variant="ghost" onClick={onBack}>

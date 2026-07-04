@@ -30,26 +30,12 @@ Then in Supabase Dashboard → **Project Settings → API**, copy:
 
 Paste them into `.env` (replace the `REPLACE_WITH_...` placeholders).
 
-### 2. Google OAuth
-
-In **Google Cloud Console**:
-
-1. APIs & Services → OAuth consent screen → External. Scopes: `openid`, `userinfo.email`, `userinfo.profile`.
-2. Authorized domains: `supabase.co`, your Vercel domain, any custom domain.
-3. Credentials → Create OAuth Client ID → **Web application**.
-4. Authorized JavaScript origins:
-   - `https://jywwgoceybjendvpbqea.supabase.co`
-   - `https://<your-vercel-domain>`
-   - `http://localhost:8080`
-5. Authorized redirect URI: `https://jywwgoceybjendvpbqea.supabase.co/auth/v1/callback`
-6. Copy Client ID + Secret → Supabase Dashboard → **Authentication → Providers → Google → Enable**.
-
 In Supabase Dashboard → **Authentication → URL Configuration**:
 
 - Site URL: your Vercel prod URL
 - Additional redirect URLs: `https://<your-vercel-domain>/**`, `http://localhost:8080/**`
 
-### 3. Vercel
+### 2. Vercel
 
 1. Import the git repo into Vercel.
 2. Framework preset: **TanStack Start** if available, otherwise **Other** with Nitro auto-detection.
@@ -89,10 +75,9 @@ Local dev connects to your **remote** Supabase project (no Docker required). All
 ## Smoke test after deploy
 
 1. Sign up with email/password, then complete organization creation to become admin.
-2. Sign in with Google — should round-trip through `/auth/callback`.
-3. Onboarding wizard → invite teacher → create class → add students.
-4. Print student QR → launch kiosk → scan a code → attendance event appears.
-5. Reports → export CSV.
+2. Onboarding wizard → invite teacher → create class → add students.
+3. Print student QR → launch kiosk → scan a code → attendance event appears.
+4. Reports → export CSV.
 
 ## Files that matter
 
