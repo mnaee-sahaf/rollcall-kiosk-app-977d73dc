@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listClasses } from "@/lib/classes.functions";
 import { getReport } from "@/lib/attendance.functions";
-import { getMyContext, listTeachers } from "@/lib/auth.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,15 +26,10 @@ function fmt(d: Date) {
 }
 
 function ReportsPage() {
-  const fCtx = useServerFn(getMyContext);
   const fClasses = useServerFn(listClasses);
-  const fTeachers = useServerFn(listTeachers);
   const fReport = useServerFn(getReport);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [classes, setClasses] = useState<Array<{ id: string; name: string }>>([]);
-  const [teachers, setTeachers] = useState<Array<{ user_id: string; full_name: string | null }>>([]);
   const [classId, setClassId] = useState<string>("");
-  const [teacherId, setTeacherId] = useState<string>("");
   const today = new Date();
   const defaultFrom = useMemo(() => {
     const d = new Date();
@@ -48,12 +42,8 @@ function ReportsPage() {
   const [granularity, setGranularity] = useState<"daily" | "weekly" | "monthly">("daily");
 
   useEffect(() => {
-    fCtx({}).then((c) => {
-      setIsAdmin(c.isAdmin);
-      if (c.isAdmin) fTeachers({}).then(setTeachers).catch(() => {});
-    });
     fClasses({}).then(setClasses);
-  }, [fCtx, fClasses, fTeachers]);
+  }, [fClasses]);
 
   useEffect(() => {
     fReport({
@@ -61,10 +51,9 @@ function ReportsPage() {
         from,
         to,
         classId: classId || undefined,
-        teacherId: teacherId || undefined,
       },
     }).then(setReport);
-  }, [fReport, from, to, classId, teacherId]);
+  }, [fReport, from, to, classId]);
 
   const series = useMemo(() => {
     if (!report) return [];
@@ -118,7 +107,7 @@ function ReportsPage() {
       <h1 className="text-3xl font-bold mb-6">Reports</h1>
 
       <Card className="p-5 mb-6">
-        <div className={`grid sm:grid-cols-2 gap-3 ${isAdmin ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
+        <div className="grid sm:grid-cols-2 gap-3 md:grid-cols-5">
           <div>
             <Label className="text-xs">From</Label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -142,23 +131,6 @@ function ReportsPage() {
               ))}
             </select>
           </div>
-          {isAdmin && (
-            <div>
-              <Label className="text-xs">Teacher</Label>
-              <select
-                value={teacherId}
-                onChange={(e) => setTeacherId(e.target.value)}
-                className="h-9 w-full rounded-md border px-2 text-sm"
-              >
-                <option value="">All teachers</option>
-                {teachers.map((t) => (
-                  <option key={t.user_id} value={t.user_id}>
-                    {t.full_name ?? t.user_id.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <div>
             <Label className="text-xs">View</Label>
             <select

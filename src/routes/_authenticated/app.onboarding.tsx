@@ -2,12 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import {
-  getMyContext,
-  completeOnboarding,
-  inviteTeacher,
-  listTeachers,
-} from "@/lib/auth.functions";
+import { getMyContext, completeOnboarding } from "@/lib/auth.functions";
 import { getSettings, updateSettings } from "@/lib/settings.functions";
 import { createClass, listClasses, bulkAddStudents } from "@/lib/classes.functions";
 import { createKioskSession } from "@/lib/kiosk.functions";
@@ -36,13 +31,10 @@ import {
 import { toast } from "sonner";
 import {
   Check,
-  Users,
   GraduationCap,
   UserPlus,
   Upload,
-  Copy,
   Plus,
-  Trash2,
   ExternalLink,
   Printer,
   MonitorSmartphone,
@@ -52,21 +44,20 @@ import {
   X,
   ChevronRight,
   Settings as SettingsIcon,
-  Mail,
   HelpCircle,
   AlertCircle,
 } from "lucide-react";
 import { Logo } from "@/components/landing/Logo";
 import { getCountryFlag } from "@/lib/countryFlags";
 
-const searchSchema = z.object({ step: z.number().int().min(1).max(4).optional() });
+const searchSchema = z.object({ step: z.number().int().min(1).max(3).optional() });
 
 export const Route = createFileRoute("/_authenticated/app/onboarding")({
   validateSearch: searchSchema,
   component: OnboardingPage,
 });
 
-type StepKey = 1 | 2 | 3 | 4;
+type StepKey = 1 | 2 | 3;
 type StepDef = {
   id: StepKey;
   label: string;
@@ -75,9 +66,8 @@ type StepDef = {
 };
 const STEPS: StepDef[] = [
   { id: 1, label: "Attendance settings", minutes: 2, icon: SettingsIcon },
-  { id: 2, label: "Invite teachers", minutes: 5, icon: Users },
-  { id: 3, label: "Create a class", minutes: 3, icon: GraduationCap },
-  { id: 4, label: "Add students & try it", minutes: 5, icon: UserPlus },
+  { id: 2, label: "Create a class", minutes: 3, icon: GraduationCap },
+  { id: 3, label: "Add students & try it", minutes: 5, icon: UserPlus },
 ];
 
 // Common IANA timezones for the selector
@@ -132,19 +122,16 @@ function OnboardingPage() {
   const [classId, setClassId] = useState<string | null>(null);
   const [progress, setProgress] = useState({
     hasSchoolName: false,
-    hasTeachers: false,
     hasClasses: false,
     hasStudents: false,
   });
   const [confirmClose, setConfirmClose] = useState(false);
   const [step1Saved, setStep1Saved] = useState(false);
-  const [step2Skipped, setStep2Skipped] = useState(false);
 
   async function refreshProgress() {
     const c = await fCtx({});
     setProgress({
       hasSchoolName: c.setupProgress.hasSchoolName,
-      hasTeachers: c.setupProgress.hasTeachers,
       hasClasses: c.setupProgress.hasClasses,
       hasStudents: c.setupProgress.hasStudents,
     });
@@ -167,11 +154,10 @@ function OnboardingPage() {
   const completed = useMemo(() => {
     return {
       1: step1Saved,
-      2: progress.hasTeachers || step2Skipped,
-      3: progress.hasClasses,
-      4: progress.hasStudents,
+      2: progress.hasClasses,
+      3: progress.hasStudents,
     } as Record<StepKey, boolean>;
-  }, [step1Saved, step2Skipped, progress]);
+  }, [step1Saved, progress]);
 
   const completedCount = (Object.values(completed) as boolean[]).filter(Boolean).length;
   const pct = Math.round((completedCount / STEPS.length) * 100);
@@ -270,9 +256,10 @@ function OnboardingPage() {
               />
             )}
             {step === 2 && (
-              <StepTeachers
-                onContinue={async (skipped) => {
-                  if (skipped) setStep2Skipped(true);
+              <StepClass
+                classId={classId}
+                onCreated={(id) => setClassId(id)}
+                onContinue={async () => {
                   await refreshProgress();
                   goto(3);
                 }}
@@ -280,21 +267,10 @@ function OnboardingPage() {
               />
             )}
             {step === 3 && (
-              <StepClass
-                classId={classId}
-                onCreated={(id) => setClassId(id)}
-                onContinue={async () => {
-                  await refreshProgress();
-                  goto(4);
-                }}
-                onBack={() => goto(2)}
-              />
-            )}
-            {step === 4 && (
               <StepStudentsAndTry
                 classId={classId}
                 onPickClass={setClassId}
-                onBack={() => goto(3)}
+                onBack={() => goto(2)}
                 onFinish={async () => {
                   await refreshProgress();
                   await finish();
@@ -513,7 +489,7 @@ function StepSchool({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     fGet({}).then((s) => {
       if (s) {
-        setOrgName(s.school_name ?? "");
+        setOrgName(s.name ?? "");
         setCountry((s as { country?: string | null }).country ?? "");
         setLogoUrl(s.logo_url ?? null);
         setCutoff((s.day_cutoff_time ?? "09:00").slice(0, 5));
@@ -602,7 +578,7 @@ function StepSchool({ onDone }: { onDone: () => void }) {
       description="Set how Jibble RollCall tracks late and absent students, and add a logo for kiosks and printed QR sheets."
       footer={
         <>
-          <span className="text-xs text-muted-foreground">Step 1 of 4</span>
+          <span className="text-xs text-muted-foreground">Step 1 of 3</span>
           <Button onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Continue"}
             <ArrowRight className="h-4 w-4 ml-2" />
@@ -706,214 +682,11 @@ function StepSchool({ onDone }: { onDone: () => void }) {
   );
 }
 
-/* ---------- Step 2: Teachers ---------- */
-
-const emailSchema = z.string().trim().toLowerCase().email("Enter a valid email").max(255);
-
-function StepTeachers({
-  onContinue,
-  onBack,
-}: {
-  onContinue: (skipped: boolean) => void;
-  onBack: () => void;
-}) {
-  const fInvite = useServerFn(inviteTeacher);
-  const fTeachers = useServerFn(listTeachers);
-  const [existing, setExisting] = useState<Array<{ user_id: string; full_name: string | null }>>(
-    [],
-  );
-  const [rows, setRows] = useState<Array<{ email: string; error?: string }>>([{ email: "" }]);
-  const [sent, setSent] = useState<Array<{ email: string; link: string }>>([]);
-  const [sending, setSending] = useState(false);
-
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-
-  useEffect(() => {
-    fTeachers({})
-      .then(setExisting)
-      .catch(() => {});
-  }, [fTeachers]);
-
-  function addRow() {
-    setRows((r) => [...r, { email: "" }]);
-  }
-  function removeRow(i: number) {
-    setRows((r) => r.filter((_, idx) => idx !== i));
-  }
-
-  async function sendAll() {
-    const seen = new Set(sent.map((s) => s.email.toLowerCase()));
-    const next: typeof rows = rows.map((r) => ({ email: r.email }));
-    const toSend: string[] = [];
-    let hasError = false;
-    for (let i = 0; i < next.length; i++) {
-      const raw = next[i].email.trim();
-      if (!raw) continue;
-      const parsed = emailSchema.safeParse(raw);
-      if (!parsed.success) {
-        next[i].error = parsed.error.issues[0]?.message ?? "Invalid email";
-        hasError = true;
-        continue;
-      }
-      const norm = parsed.data;
-      if (seen.has(norm)) {
-        next[i].error = "Already invited this session";
-        hasError = true;
-        continue;
-      }
-      seen.add(norm);
-      toSend.push(norm);
-    }
-    setRows(next);
-    if (hasError) return;
-    if (toSend.length === 0) {
-      toast.error("Add at least one email");
-      return;
-    }
-    setSending(true);
-    const out: Array<{ email: string; link: string }> = [];
-    for (const email of toSend) {
-      try {
-        const { invite } = await fInvite({ data: { email } });
-        out.push({ email, link: `${origin}/auth?invite=${invite.token}` });
-      } catch (err) {
-        toast.error(`${email}: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    }
-    setSent((s) => [...s, ...out]);
-    setRows([{ email: "" }]);
-    setSending(false);
-    if (out.length)
-      toast.success(`Generated ${out.length} invite link${out.length === 1 ? "" : "s"}`);
-  }
-
-  const inviteCount = sent.length + existing.length;
-
-  return (
-    <StepShell
-      title="Invite teachers"
-      minutes={5}
-      description="Send invite links so teachers can sign in and run attendance for their own classes. You can always add more later."
-      footer={
-        <>
-          <Button variant="ghost" onClick={onBack}>
-            Back
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => onContinue(true)}>
-              Skip for now
-            </Button>
-            <Button onClick={() => onContinue(false)} disabled={inviteCount === 0}>
-              Continue <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
-        </>
-      }
-    >
-      {existing.length > 0 && (
-        <section>
-          <SectionHeader title="Already on your team" />
-          <div className="space-y-1.5">
-            {existing.map((t) => (
-              <div
-                key={t.user_id}
-                className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm"
-              >
-                <Check className="h-4 w-4 text-primary" />
-                <span className="font-medium">{t.full_name ?? "Teacher"}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section>
-        <SectionHeader
-          title="Invite by email"
-          hint="We generate a unique invite link per email. Share it however you like."
-        />
-        <div className="space-y-2">
-          {rows.map((row, i) => (
-            <div key={i}>
-              <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder="teacher@school.edu"
-                  value={row.email}
-                  onChange={(e) =>
-                    setRows((rs) =>
-                      rs.map((r, idx) =>
-                        idx === i ? { email: e.target.value, error: undefined } : r,
-                      ),
-                    )
-                  }
-                  className={row.error ? "border-destructive" : ""}
-                />
-                {rows.length > 1 && (
-                  <Button variant="ghost" size="icon" onClick={() => removeRow(i)} type="button">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <FieldError message={row.error} />
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-between mt-3">
-          <Button variant="ghost" size="sm" onClick={addRow} type="button">
-            <Plus className="h-4 w-4 mr-1" /> Add another
-          </Button>
-          <Button onClick={sendAll} disabled={sending} type="button">
-            {sending ? "Generating…" : "Generate invite links"}
-          </Button>
-        </div>
-      </section>
-
-      {sent.length > 0 && (
-        <section>
-          <SectionHeader title="Share these links" />
-          <div className="space-y-2">
-            {sent.map((s) => (
-              <div
-                key={s.link}
-                className="flex items-center gap-2 rounded-md border bg-emerald-50 border-emerald-200 px-3 py-2 text-sm"
-              >
-                <span className="flex-1 truncate font-medium">{s.email}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(s.link);
-                    toast.success("Copied");
-                  }}
-                >
-                  <Copy className="h-3 w-3 mr-1" /> Copy
-                </Button>
-                <a
-                  className="inline-flex items-center gap-1 rounded-md border bg-white px-2.5 py-1.5 text-xs hover:bg-muted"
-                  href={`mailto:${s.email}?subject=${encodeURIComponent(
-                    "Your Jibble RollCall invite",
-                  )}&body=${encodeURIComponent(
-                    `You've been invited to Jibble RollCall. Accept here: ${s.link}`,
-                  )}`}
-                >
-                  <Mail className="h-3 w-3" /> Email
-                </a>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-    </StepShell>
-  );
-}
-
-/* ---------- Step 3: Class ---------- */
+/* ---------- Step 2: Class ---------- */
 
 const classSchema = z.object({
   name: z.string().trim().min(1, "Class name is required").max(80, "Keep it under 80 characters"),
   grade: z.string().trim().max(20, "Keep it under 20 characters").optional(),
-  teacherId: z.string().uuid().optional().or(z.literal("")),
 });
 
 function StepClass({
@@ -929,18 +702,13 @@ function StepClass({
 }) {
   const fCreate = useServerFn(createClass);
   const fList = useServerFn(listClasses);
-  const fTeachers = useServerFn(listTeachers);
   const fCtx = useServerFn(getMyContext);
   const [classes, setClasses] = useState<Array<{ id: string; name: string; grade: string | null }>>(
-    [],
-  );
-  const [teachers, setTeachers] = useState<Array<{ user_id: string; full_name: string | null }>>(
     [],
   );
   const [me, setMe] = useState<{ userId: string; email?: string } | null>(null);
   const [name, setName] = useState("");
   const [grade, setGrade] = useState("");
-  const [teacherId, setTeacherId] = useState<string>("__me");
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -952,18 +720,13 @@ function StepClass({
   useEffect(() => {
     refresh();
     fCtx({}).then((c) => setMe({ userId: c.userId, email: c.email }));
-    fTeachers({})
-      .then(setTeachers)
-      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function create() {
-    const tId = teacherId === "__me" ? "" : teacherId;
     const parsed = classSchema.safeParse({
       name,
       grade: grade || undefined,
-      teacherId: tId || undefined,
     });
     if (!parsed.success) {
       const errs: Record<string, string> = {};
@@ -978,13 +741,11 @@ function StepClass({
         data: {
           name: parsed.data.name,
           grade: parsed.data.grade,
-          teacherId: tId || undefined,
         },
       });
       onCreated(row.id);
       setName("");
       setGrade("");
-      setTeacherId("__me");
       refresh();
       toast.success("Class created");
     } catch (err) {
@@ -1037,20 +798,11 @@ function StepClass({
           </div>
         </div>
         <div className="mt-4">
-          <Label className="text-sm">Assigned teacher</Label>
-          <Select value={teacherId} onValueChange={setTeacherId}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__me">Me ({me?.email ?? "admin"})</SelectItem>
-              {teachers.map((t) => (
-                <SelectItem key={t.user_id} value={t.user_id}>
-                  {t.full_name ?? t.user_id.slice(0, 8)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label className="text-sm">Assigned to</Label>
+          <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm mt-1">
+            <Check className="h-4 w-4 text-primary" />
+            <span className="font-medium">Me ({me?.email ?? "admin"})</span>
+          </div>
         </div>
         <div className="mt-4">
           <Button onClick={create} disabled={saving}>
@@ -1085,7 +837,7 @@ function StepClass({
   );
 }
 
-/* ---------- Step 4: Students & try it ---------- */
+/* ---------- Step 3: Students & try it ---------- */
 
 const studentLineSchema = z.object({
   full_name: z.string().trim().min(1).max(100),

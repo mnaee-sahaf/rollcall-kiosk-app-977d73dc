@@ -65,7 +65,7 @@ export function StickerSheetDialog({
           class_name: (s as any).classes?.name ?? null,
         })),
         layout,
-        { schoolName: settings?.school_name ?? null },
+        { schoolName: settings?.name ?? null },
       );
       downloadBlob(blob, `rollcall-stickers-${layout}-${Date.now()}.pdf`);
       toast.success(`Generated ${students.length} labels`);
