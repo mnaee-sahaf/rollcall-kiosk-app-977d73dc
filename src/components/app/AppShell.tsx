@@ -63,7 +63,7 @@ export function AppShell({
             <UserSquare2 className="h-4 w-4" /> All students
           </Link>
           <Link to="/app/teachers" className={linkClass(pathname.startsWith("/app/teachers"))}>
-            <Users className="h-4 w-4" /> Teachers
+            <Users className="h-4 w-4" /> Team
           </Link>
           <Link to="/app/import" className={linkClass(pathname.startsWith("/app/import"))}>
             <Upload className="h-4 w-4" /> Bulk import

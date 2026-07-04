@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { resolveActiveOrgId } from "@/lib/org-context";
+import { resolveActiveOrgId, requireOrgRole } from "@/lib/org-context";
 
 // Settings now live on the active organization (no more singleton).
 export const getSettings = createServerFn({ method: "GET" })
@@ -33,8 +33,7 @@ export const updateSettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const orgId = await resolveActiveOrgId(supabaseAdmin, context.userId);
-    if (!orgId) throw new Error("No active organization");
+    const { orgId } = await requireOrgRole(supabaseAdmin, context.userId, ["owner", "admin"]);
     const { data: row, error } = await supabaseAdmin
       .from("organizations")
       .update(data)

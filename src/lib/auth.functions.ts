@@ -65,6 +65,7 @@ export const getMyContext = createServerFn({ method: "GET" })
       // Compatibility flags for existing UI (Phase 1: only owner exists).
       isOwner: role === "owner",
       isAdmin: role === "owner" || role === "admin",
+      isManager: role === "manager",
       isTeacher: role === "manager",
       roles: role ? [role] : [],
       setupProgress,
