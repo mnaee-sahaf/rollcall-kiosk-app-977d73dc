@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveActiveOrgId } from "@/lib/org-context";
+import { assertBulkImportAllowed } from "@/lib/plans";
 
 export const importStudents = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -25,6 +26,7 @@ export const importStudents = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const orgId = await resolveActiveOrgId(supabaseAdmin, context.userId);
     if (!orgId) throw new Error("No active organization");
+    await assertBulkImportAllowed(supabaseAdmin, orgId);
 
     const classCache = new Map<string, string>();
     const results: Array<{ row: number; ok: boolean; error?: string }> = [];

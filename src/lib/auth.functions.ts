@@ -18,7 +18,7 @@ export const getMyContext = createServerFn({ method: "GET" })
     const orgIds = (mems ?? []).map((m) => m.org_id);
     const { data: orgRows } = await supabaseAdmin
       .from("organizations")
-      .select("id, name, onboarded_at")
+      .select("id, name, onboarded_at, plan")
       .in("id", orgIds.length ? orgIds : ["00000000-0000-0000-0000-000000000000"]);
     const orgById = new Map((orgRows ?? []).map((o) => [o.id, o]));
 
@@ -39,12 +39,19 @@ export const getMyContext = createServerFn({ method: "GET" })
       hasKioskSession: false,
       onboardedAt: null as string | null,
     };
+    let usage = { classes: 0, students: 0, staff: 0 };
     if (activeOrgId) {
-      const [classCount, studentCount, kioskCount] = await Promise.all([
+      const [classCount, studentCount, kioskCount, staffCount] = await Promise.all([
         supabaseAdmin.from("classes").select("id", { count: "exact", head: true }).eq("org_id", activeOrgId),
         supabaseAdmin.from("students").select("id", { count: "exact", head: true }).eq("org_id", activeOrgId),
         supabaseAdmin.from("kiosk_sessions").select("id", { count: "exact", head: true }).eq("org_id", activeOrgId),
+        supabaseAdmin.from("memberships").select("id", { count: "exact", head: true }).eq("org_id", activeOrgId),
       ]);
+      usage = {
+        classes: classCount.count ?? 0,
+        students: studentCount.count ?? 0,
+        staff: staffCount.count ?? 0,
+      };
       setupProgress = {
         hasSchoolName: !!activeOrg?.name,
         hasClasses: (classCount.count ?? 0) > 0,
@@ -68,6 +75,8 @@ export const getMyContext = createServerFn({ method: "GET" })
       isManager: role === "manager",
       isTeacher: role === "manager",
       roles: role ? [role] : [],
+      plan: ((activeOrg?.plan as "free" | "pro" | undefined) ?? "free"),
+      usage,
       setupProgress,
       needsOnboarding: !!activeOrgId && !setupProgress.onboardedAt,
     };

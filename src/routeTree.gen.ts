@@ -28,6 +28,7 @@ import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAppOnboardingRouteImport } from './routes/_authenticated/app.onboarding'
 import { Route as AuthenticatedAppImportRouteImport } from './routes/_authenticated/app.import'
 import { Route as AuthenticatedAppClassesRouteImport } from './routes/_authenticated/app.classes'
+import { Route as AuthenticatedAppBillingRouteImport } from './routes/_authenticated/app.billing'
 import { Route as AuthenticatedAppClassesClassIdRouteImport } from './routes/_authenticated/app.classes.$classId'
 import { Route as AuthenticatedAppClassesClassIdQrRouteImport } from './routes/_authenticated/app.classes.$classId.qr'
 
@@ -131,6 +132,11 @@ const AuthenticatedAppClassesRoute = AuthenticatedAppClassesRouteImport.update({
   path: '/classes',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppBillingRoute = AuthenticatedAppBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
 const AuthenticatedAppClassesClassIdRoute =
   AuthenticatedAppClassesClassIdRouteImport.update({
     id: '/$classId',
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
+  '/app/billing': typeof AuthenticatedAppBillingRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/app/import': typeof AuthenticatedAppImportRoute
   '/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/student': typeof StudentRoute
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
+  '/app/billing': typeof AuthenticatedAppBillingRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/app/import': typeof AuthenticatedAppImportRoute
   '/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
+  '/_authenticated/app/billing': typeof AuthenticatedAppBillingRoute
   '/_authenticated/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/_authenticated/app/import': typeof AuthenticatedAppImportRoute
   '/_authenticated/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -222,6 +231,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
+    | '/app/billing'
     | '/app/classes'
     | '/app/import'
     | '/app/onboarding'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/student'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
+    | '/app/billing'
     | '/app/classes'
     | '/app/import'
     | '/app/onboarding'
@@ -266,6 +277,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
+    | '/_authenticated/app/billing'
     | '/_authenticated/app/classes'
     | '/_authenticated/app/import'
     | '/_authenticated/app/onboarding'
@@ -426,6 +438,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppClassesRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/billing': {
+      id: '/_authenticated/app/billing'
+      path: '/billing'
+      fullPath: '/app/billing'
+      preLoaderRoute: typeof AuthenticatedAppBillingRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/classes/$classId': {
       id: '/_authenticated/app/classes/$classId'
       path: '/$classId'
@@ -474,6 +493,7 @@ const AuthenticatedAppClassesRouteWithChildren =
   )
 
 interface AuthenticatedAppRouteChildren {
+  AuthenticatedAppBillingRoute: typeof AuthenticatedAppBillingRoute
   AuthenticatedAppClassesRoute: typeof AuthenticatedAppClassesRouteWithChildren
   AuthenticatedAppImportRoute: typeof AuthenticatedAppImportRoute
   AuthenticatedAppOnboardingRoute: typeof AuthenticatedAppOnboardingRoute
@@ -487,6 +507,7 @@ interface AuthenticatedAppRouteChildren {
 }
 
 const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
+  AuthenticatedAppBillingRoute: AuthenticatedAppBillingRoute,
   AuthenticatedAppClassesRoute: AuthenticatedAppClassesRouteWithChildren,
   AuthenticatedAppImportRoute: AuthenticatedAppImportRoute,
   AuthenticatedAppOnboardingRoute: AuthenticatedAppOnboardingRoute,

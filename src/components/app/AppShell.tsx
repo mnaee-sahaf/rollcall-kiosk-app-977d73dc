@@ -10,6 +10,7 @@ import {
   UserSquare2,
   Menu,
   Mail,
+  CreditCard,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/landing/Logo";
@@ -70,6 +71,9 @@ export function AppShell({
           </Link>
           <Link to="/app/waitlist" className={linkClass(pathname.startsWith("/app/waitlist"))}>
             <Mail className="h-4 w-4" /> Waitlist
+          </Link>
+          <Link to="/app/billing" className={linkClass(pathname.startsWith("/app/billing"))}>
+            <CreditCard className="h-4 w-4" /> Billing
           </Link>
           <Link to="/app/settings" className={linkClass(pathname.startsWith("/app/settings"))}>
             <Settings className="h-4 w-4" /> Settings
