@@ -18,6 +18,19 @@ export const Route = createFileRoute("/_authenticated")({
       throw redirect({ to: "/welcome" });
     }
 
+    // Teachers created by an admin get a temp password and must set their own
+    // before reaching anything else. Server-enforced here, not just in the UI.
+    if (hasRole && location.pathname !== "/app/set-password") {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("must_change_password")
+        .eq("id", data.user.id)
+        .maybeSingle();
+      if (profile?.must_change_password) {
+        throw redirect({ to: "/app/set-password" });
+      }
+    }
+
     return { user: data.user };
   },
   component: () => <Outlet />,
