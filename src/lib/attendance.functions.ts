@@ -1,6 +1,26 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
+
+// Verifies the student exists and is in the given class before writing
+// attendance. The RLS-scoped client also blocks students outside the caller's
+// classes, so a not-found result throws the same friendly error.
+async function assertStudentInClass(
+  supabase: SupabaseClient<Database>,
+  studentId: string,
+  classId: string,
+): Promise<void> {
+  const { data: student } = await supabase
+    .from("students")
+    .select("class_id")
+    .eq("id", studentId)
+    .maybeSingle();
+  if (!student || student.class_id !== classId) {
+    throw new Error("Student is not in this class");
+  }
+}
 
 export const getClassRoster = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -51,6 +71,10 @@ export const markAttendance = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const day = data.day ?? new Date().toISOString().slice(0, 10);
+    // Guard against filing attendance for a student who isn't in this class.
+    // RLS confirms the teacher owns class_id but NOT that the student belongs
+    // to it, so without this a crafted request could corrupt a student's day.
+    await assertStudentInClass(supabase, data.studentId, data.classId);
     const { data: existing } = await supabase
       .from("attendance_events")
       .select("id")
@@ -98,6 +122,7 @@ export const setStudentNote = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const day = data.day ?? new Date().toISOString().slice(0, 10);
+    await assertStudentInClass(supabase, data.studentId, data.classId);
     const { data: existing } = await supabase
       .from("attendance_events")
       .select("id")
