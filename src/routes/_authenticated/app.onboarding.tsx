@@ -2,12 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import {
-  getMyContext,
-  completeOnboarding,
-  inviteTeacher,
-  listTeachers,
-} from "@/lib/auth.functions";
+import { getMyContext, completeOnboarding, listTeachers } from "@/lib/auth.functions";
+import { createTeacherAccount } from "@/lib/teachers.functions";
 import { getSettings, updateSettings } from "@/lib/settings.functions";
 import { createClass, listClasses, bulkAddStudents } from "@/lib/classes.functions";
 import { createKioskSession } from "@/lib/kiosk.functions";
@@ -717,16 +713,22 @@ function StepTeachers({
   onContinue: (skipped: boolean) => void;
   onBack: () => void;
 }) {
-  const fInvite = useServerFn(inviteTeacher);
+  const fCreate = useServerFn(createTeacherAccount);
   const fTeachers = useServerFn(listTeachers);
   const [existing, setExisting] = useState<Array<{ user_id: string; full_name: string | null }>>(
     [],
   );
-  const [rows, setRows] = useState<Array<{ email: string; error?: string }>>([{ email: "" }]);
-  const [sent, setSent] = useState<Array<{ email: string; link: string }>>([]);
-  const [sending, setSending] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState<Array<{ email: string; password: string }>>([]);
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  function genTempPassword() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    const arr = new Uint32Array(12);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, (n) => chars[n % chars.length]).join("");
+  }
 
   useEffect(() => {
     fTeachers({})
@@ -734,66 +736,41 @@ function StepTeachers({
       .catch(() => {});
   }, [fTeachers]);
 
-  function addRow() {
-    setRows((r) => [...r, { email: "" }]);
-  }
-  function removeRow(i: number) {
-    setRows((r) => r.filter((_, idx) => idx !== i));
-  }
-
-  async function sendAll() {
-    const seen = new Set(sent.map((s) => s.email.toLowerCase()));
-    const next: typeof rows = rows.map((r) => ({ email: r.email }));
-    const toSend: string[] = [];
-    let hasError = false;
-    for (let i = 0; i < next.length; i++) {
-      const raw = next[i].email.trim();
-      if (!raw) continue;
-      const parsed = emailSchema.safeParse(raw);
-      if (!parsed.success) {
-        next[i].error = parsed.error.issues[0]?.message ?? "Invalid email";
-        hasError = true;
-        continue;
-      }
-      const norm = parsed.data;
-      if (seen.has(norm)) {
-        next[i].error = "Already invited this session";
-        hasError = true;
-        continue;
-      }
-      seen.add(norm);
-      toSend.push(norm);
-    }
-    setRows(next);
-    if (hasError) return;
-    if (toSend.length === 0) {
-      toast.error("Add at least one email");
+  async function handleCreate() {
+    const parsed = emailSchema.safeParse(email.trim());
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Invalid email");
       return;
     }
-    setSending(true);
-    const out: Array<{ email: string; link: string }> = [];
-    for (const email of toSend) {
-      try {
-        const { invite } = await fInvite({ data: { email } });
-        out.push({ email, link: `${origin}/auth?invite=${invite.token}` });
-      } catch (err) {
-        toast.error(`${email}: ${err instanceof Error ? err.message : "failed"}`);
-      }
+    if (!fullName.trim()) {
+      toast.error("Enter the teacher's name");
+      return;
     }
-    setSent((s) => [...s, ...out]);
-    setRows([{ email: "" }]);
-    setSending(false);
-    if (out.length)
-      toast.success(`Generated ${out.length} invite link${out.length === 1 ? "" : "s"}`);
+    const pw = genTempPassword();
+    setBusy(true);
+    try {
+      await fCreate({ data: { email: parsed.data, fullName: fullName.trim(), tempPassword: pw } });
+      setCreated((c) => [...c, { email: parsed.data, password: pw }]);
+      setFullName("");
+      setEmail("");
+      fTeachers({})
+        .then(setExisting)
+        .catch(() => {});
+      toast.success("Teacher login created");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create login");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const inviteCount = sent.length + existing.length;
+  const teacherCount = existing.length + created.length;
 
   return (
     <StepShell
-      title="Invite teachers"
+      title="Create teacher logins"
       minutes={5}
-      description="Send invite links so teachers can sign in and run attendance for their own classes. You can always add more later."
+      description="Create a login for each teacher. They sign in with the temporary password you share, then set their own. You can add more later."
       footer={
         <>
           <Button variant="ghost" onClick={onBack}>
@@ -803,7 +780,7 @@ function StepTeachers({
             <Button variant="ghost" onClick={() => onContinue(true)}>
               Skip for now
             </Button>
-            <Button onClick={() => onContinue(false)} disabled={inviteCount === 0}>
+            <Button onClick={() => onContinue(false)} disabled={teacherCount === 0}>
               Continue <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
@@ -829,76 +806,56 @@ function StepTeachers({
 
       <section>
         <SectionHeader
-          title="Invite by email"
-          hint="We generate a unique invite link per email. Share it however you like."
+          title="Add a teacher"
+          hint="No emails are sent — share the login you create directly."
         />
-        <div className="space-y-2">
-          {rows.map((row, i) => (
-            <div key={i}>
-              <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder="teacher@school.edu"
-                  value={row.email}
-                  onChange={(e) =>
-                    setRows((rs) =>
-                      rs.map((r, idx) =>
-                        idx === i ? { email: e.target.value, error: undefined } : r,
-                      ),
-                    )
-                  }
-                  className={row.error ? "border-destructive" : ""}
-                />
-                {rows.length > 1 && (
-                  <Button variant="ghost" size="icon" onClick={() => removeRow(i)} type="button">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <FieldError message={row.error} />
-            </div>
-          ))}
+        <div className="grid sm:grid-cols-2 gap-2">
+          <Input
+            placeholder="Full name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
+          <Input
+            type="email"
+            placeholder="teacher@school.edu"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
-        <div className="flex justify-between mt-3">
-          <Button variant="ghost" size="sm" onClick={addRow} type="button">
-            <Plus className="h-4 w-4 mr-1" /> Add another
-          </Button>
-          <Button onClick={sendAll} disabled={sending} type="button">
-            {sending ? "Generating…" : "Generate invite links"}
+        <div className="flex justify-end mt-3">
+          <Button onClick={handleCreate} disabled={busy} type="button">
+            {busy ? "Creating…" : "Create login"}
           </Button>
         </div>
       </section>
 
-      {sent.length > 0 && (
+      {created.length > 0 && (
         <section>
-          <SectionHeader title="Share these links" />
+          <SectionHeader title="Share these logins" />
           <div className="space-y-2">
-            {sent.map((s) => (
+            {created.map((c) => (
               <div
-                key={s.link}
-                className="flex items-center gap-2 rounded-md border bg-emerald-50 border-emerald-200 px-3 py-2 text-sm"
+                key={c.email}
+                className="rounded-md border bg-emerald-50 border-emerald-200 px-3 py-2 text-sm"
               >
-                <span className="flex-1 truncate font-medium">{s.email}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(s.link);
-                    toast.success("Copied");
-                  }}
-                >
-                  <Copy className="h-3 w-3 mr-1" /> Copy
-                </Button>
-                <a
-                  className="inline-flex items-center gap-1 rounded-md border bg-white px-2.5 py-1.5 text-xs hover:bg-muted"
-                  href={`mailto:${s.email}?subject=${encodeURIComponent(
-                    "Your Jibble RollCall invite",
-                  )}&body=${encodeURIComponent(
-                    `You've been invited to Jibble RollCall. Accept here: ${s.link}`,
-                  )}`}
-                >
-                  <Mail className="h-3 w-3" /> Email
-                </a>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{c.email}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `Email: ${c.email}\nTemporary password: ${c.password}`,
+                      );
+                      toast.success("Copied");
+                    }}
+                  >
+                    <Copy className="h-3 w-3 mr-1" /> Copy
+                  </Button>
+                </div>
+                <div className="mt-1 font-mono text-xs text-muted-foreground">
+                  Temp password: {c.password}
+                </div>
               </div>
             ))}
           </div>
