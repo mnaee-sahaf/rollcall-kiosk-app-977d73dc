@@ -61,9 +61,10 @@ function DashboardPage() {
     }
   }, [fetchCtx, fetchClasses, navigate, search.welcome]);
 
-  if (!ctx) return null;
-
-  const progress = ctx.setupProgress;
+  // All hooks must run on every render — keep this useMemo ABOVE the `!ctx`
+  // early return, or React throws "rendered more hooks than during the
+  // previous render" (#310) once ctx loads.
+  const progress = ctx?.setupProgress;
   const setupSteps = useMemo(
     () => [
       {
@@ -71,7 +72,7 @@ function DashboardPage() {
         title: "Set up your school profile",
         description: "Add your school name, logo, timezone and cutoff times.",
         time: "2 min",
-        done: progress.hasSchoolName,
+        done: !!progress?.hasSchoolName,
         icon: Building2,
         step: 1 as const,
       },
@@ -80,7 +81,7 @@ function DashboardPage() {
         title: "Invite your teachers",
         description: "Send invite links so teachers can manage their rosters.",
         time: "3 min",
-        done: progress.hasTeachers,
+        done: !!progress?.hasTeachers,
         icon: UserPlus,
         step: 2 as const,
       },
@@ -89,7 +90,7 @@ function DashboardPage() {
         title: "Create your first class",
         description: "Group students into classes and assign a teacher.",
         time: "2 min",
-        done: progress.hasClasses,
+        done: !!progress?.hasClasses,
         icon: GraduationCap,
         step: 3 as const,
       },
@@ -98,7 +99,7 @@ function DashboardPage() {
         title: "Add students",
         description: "Add students individually or import them in bulk.",
         time: "5 min",
-        done: progress.hasStudents,
+        done: !!progress?.hasStudents,
         icon: Users,
         step: 4 as const,
       },
@@ -107,13 +108,15 @@ function DashboardPage() {
         title: "Try a kiosk",
         description: "Launch a web kiosk and scan your first QR.",
         time: "1 min",
-        done: false,
+        done: !!progress?.hasKioskSession,
         icon: ScanLine,
         step: 5 as const,
       },
     ],
     [progress],
   );
+
+  if (!ctx) return null;
 
   const doneCount = setupSteps.filter((s) => s.done).length;
   const total = setupSteps.length;

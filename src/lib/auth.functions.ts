@@ -6,14 +6,22 @@ export const getMyContext = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const [rolesRes, profileRes, settingsRes, classCountRes, studentCountRes, teacherCountRes] =
-      await Promise.all([
+    const [
+      rolesRes,
+      profileRes,
+      settingsRes,
+      classCountRes,
+      studentCountRes,
+      teacherCountRes,
+      kioskCountRes,
+    ] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", userId),
         supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
         supabase.from("school_settings").select("school_name, onboarded_at").eq("singleton", true).maybeSingle(),
         supabase.from("classes").select("id", { count: "exact", head: true }),
         supabase.from("students").select("id", { count: "exact", head: true }),
         supabase.from("user_roles").select("user_id", { count: "exact", head: true }).eq("role", "teacher"),
+        supabase.from("kiosk_sessions").select("id", { count: "exact", head: true }),
       ]);
     const roles = (rolesRes.data ?? []).map((r: { role: string }) => r.role);
     const isAdmin = roles.includes("admin");
@@ -22,6 +30,7 @@ export const getMyContext = createServerFn({ method: "GET" })
       hasTeachers: (teacherCountRes.count ?? 0) > 0,
       hasClasses: (classCountRes.count ?? 0) > 0,
       hasStudents: (studentCountRes.count ?? 0) > 0,
+      hasKioskSession: (kioskCountRes.count ?? 0) > 0,
       onboardedAt: settingsRes.data?.onboarded_at ?? null,
     };
     return {
