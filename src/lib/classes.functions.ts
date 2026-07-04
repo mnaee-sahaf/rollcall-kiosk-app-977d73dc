@@ -1,25 +1,27 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { resolveActiveOrgId } from "@/lib/org-context";
+import { resolveActiveMembership } from "@/lib/org-context";
 
-// Resolve the caller's active org or throw. Every handler scopes to this.
+// Resolve the caller's active org + role or throw. Every handler scopes to this.
 async function activeOrg(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const orgId = await resolveActiveOrgId(supabaseAdmin, userId);
-  if (!orgId) throw new Error("No active organization");
-  return { supabaseAdmin, orgId };
+  const m = await resolveActiveMembership(supabaseAdmin, userId);
+  if (!m) throw new Error("No active organization");
+  return { supabaseAdmin, orgId: m.orgId, role: m.role };
 }
 
 export const listClasses = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
-    const { data, error } = await supabaseAdmin
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    let q = supabaseAdmin
       .from("classes")
       .select("id, name, grade, teacher_id, created_at")
       .eq("org_id", orgId)
       .order("created_at", { ascending: false });
+    if (role === "manager") q = q.eq("teacher_id", context.userId);
+    const { data, error } = await q;
     if (error) throw new Error(error.message);
     return data;
   });
@@ -27,12 +29,14 @@ export const listClasses = createServerFn({ method: "GET" })
 export const listClassesWithMeta = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
-    const { data: classes } = await supabaseAdmin
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    let cq = supabaseAdmin
       .from("classes")
       .select("id, name, grade, teacher_id, created_at")
       .eq("org_id", orgId)
       .order("name");
+    if (role === "manager") cq = cq.eq("teacher_id", context.userId);
+    const { data: classes } = await cq;
     const ids = (classes ?? []).map((c) => c.teacher_id).filter((x): x is string => !!x);
     const { data: profs } = await supabaseAdmin
       .from("profiles")
@@ -64,7 +68,8 @@ export const createClass = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    if (role === "manager") throw new Error("Only owners and admins can manage classes");
     const { data: row, error } = await supabaseAdmin
       .from("classes")
       .insert({
@@ -92,7 +97,8 @@ export const updateClass = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    if (role === "manager") throw new Error("Only owners and admins can manage classes");
     const patch: { name?: string; grade?: string | null; teacher_id?: string } = {};
     if (data.name !== undefined) patch.name = data.name;
     if (data.grade !== undefined) patch.grade = data.grade;
@@ -110,7 +116,8 @@ export const deleteClass = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ classId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    if (role === "manager") throw new Error("Only owners and admins can manage classes");
     const { error } = await supabaseAdmin
       .from("classes")
       .delete()
@@ -124,9 +131,11 @@ export const getClass = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ classId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    let clsQ = supabaseAdmin.from("classes").select("*").eq("id", data.classId).eq("org_id", orgId);
+    if (role === "manager") clsQ = clsQ.eq("teacher_id", context.userId);
     const [{ data: cls, error: e1 }, { data: students, error: e2 }] = await Promise.all([
-      supabaseAdmin.from("classes").select("*").eq("id", data.classId).eq("org_id", orgId).maybeSingle(),
+      clsQ.maybeSingle(),
       supabaseAdmin
         .from("students")
         .select("*")

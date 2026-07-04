@@ -22,6 +22,7 @@ import { Route as AuthenticatedAppWaitlistRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAppTeachersRouteImport } from './routes/_authenticated/app.teachers'
 import { Route as AuthenticatedAppStudentsRouteImport } from './routes/_authenticated/app.students'
 import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/app.settings'
+import { Route as AuthenticatedAppSetPasswordRouteImport } from './routes/_authenticated/app.set-password'
 import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authenticated/app.reports'
 import { Route as AuthenticatedAppOnboardingRouteImport } from './routes/_authenticated/app.onboarding'
 import { Route as AuthenticatedAppImportRouteImport } from './routes/_authenticated/app.import'
@@ -97,6 +98,12 @@ const AuthenticatedAppSettingsRoute =
     path: '/settings',
     getParentRoute: () => AuthenticatedAppRoute,
   } as any)
+const AuthenticatedAppSetPasswordRoute =
+  AuthenticatedAppSetPasswordRouteImport.update({
+    id: '/set-password',
+    path: '/set-password',
+    getParentRoute: () => AuthenticatedAppRoute,
+  } as any)
 const AuthenticatedAppReportsRoute = AuthenticatedAppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -143,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/app/import': typeof AuthenticatedAppImportRoute
   '/app/onboarding': typeof AuthenticatedAppOnboardingRoute
   '/app/reports': typeof AuthenticatedAppReportsRoute
+  '/app/set-password': typeof AuthenticatedAppSetPasswordRoute
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/app/students': typeof AuthenticatedAppStudentsRoute
   '/app/teachers': typeof AuthenticatedAppTeachersRoute
@@ -162,6 +170,7 @@ export interface FileRoutesByTo {
   '/app/import': typeof AuthenticatedAppImportRoute
   '/app/onboarding': typeof AuthenticatedAppOnboardingRoute
   '/app/reports': typeof AuthenticatedAppReportsRoute
+  '/app/set-password': typeof AuthenticatedAppSetPasswordRoute
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/app/students': typeof AuthenticatedAppStudentsRoute
   '/app/teachers': typeof AuthenticatedAppTeachersRoute
@@ -184,6 +193,7 @@ export interface FileRoutesById {
   '/_authenticated/app/import': typeof AuthenticatedAppImportRoute
   '/_authenticated/app/onboarding': typeof AuthenticatedAppOnboardingRoute
   '/_authenticated/app/reports': typeof AuthenticatedAppReportsRoute
+  '/_authenticated/app/set-password': typeof AuthenticatedAppSetPasswordRoute
   '/_authenticated/app/settings': typeof AuthenticatedAppSettingsRoute
   '/_authenticated/app/students': typeof AuthenticatedAppStudentsRoute
   '/_authenticated/app/teachers': typeof AuthenticatedAppTeachersRoute
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/app/import'
     | '/app/onboarding'
     | '/app/reports'
+    | '/app/set-password'
     | '/app/settings'
     | '/app/students'
     | '/app/teachers'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/app/import'
     | '/app/onboarding'
     | '/app/reports'
+    | '/app/set-password'
     | '/app/settings'
     | '/app/students'
     | '/app/teachers'
@@ -246,6 +258,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/import'
     | '/_authenticated/app/onboarding'
     | '/_authenticated/app/reports'
+    | '/_authenticated/app/set-password'
     | '/_authenticated/app/settings'
     | '/_authenticated/app/students'
     | '/_authenticated/app/teachers'
@@ -358,6 +371,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppSettingsRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/set-password': {
+      id: '/_authenticated/app/set-password'
+      path: '/set-password'
+      fullPath: '/app/set-password'
+      preLoaderRoute: typeof AuthenticatedAppSetPasswordRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/reports': {
       id: '/_authenticated/app/reports'
       path: '/reports'
@@ -438,6 +458,7 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppImportRoute: typeof AuthenticatedAppImportRoute
   AuthenticatedAppOnboardingRoute: typeof AuthenticatedAppOnboardingRoute
   AuthenticatedAppReportsRoute: typeof AuthenticatedAppReportsRoute
+  AuthenticatedAppSetPasswordRoute: typeof AuthenticatedAppSetPasswordRoute
   AuthenticatedAppSettingsRoute: typeof AuthenticatedAppSettingsRoute
   AuthenticatedAppStudentsRoute: typeof AuthenticatedAppStudentsRoute
   AuthenticatedAppTeachersRoute: typeof AuthenticatedAppTeachersRoute
@@ -450,6 +471,7 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppImportRoute: AuthenticatedAppImportRoute,
   AuthenticatedAppOnboardingRoute: AuthenticatedAppOnboardingRoute,
   AuthenticatedAppReportsRoute: AuthenticatedAppReportsRoute,
+  AuthenticatedAppSetPasswordRoute: AuthenticatedAppSetPasswordRoute,
   AuthenticatedAppSettingsRoute: AuthenticatedAppSettingsRoute,
   AuthenticatedAppStudentsRoute: AuthenticatedAppStudentsRoute,
   AuthenticatedAppTeachersRoute: AuthenticatedAppTeachersRoute,

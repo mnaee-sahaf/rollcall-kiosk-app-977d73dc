@@ -3,14 +3,36 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { resolveActiveOrgId } from "@/lib/org-context";
+import { resolveActiveMembership } from "@/lib/org-context";
 
-// Resolve the caller's active org or throw. Every handler scopes to this.
+// Resolve the caller's active org (and role) or throw. Every handler scopes to
+// this; role gates capability (owner/admin full, manager restricted to own
+// classes).
 async function activeOrg(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const orgId = await resolveActiveOrgId(supabaseAdmin, userId);
-  if (!orgId) throw new Error("No active organization");
-  return { supabaseAdmin, orgId };
+  const m = await resolveActiveMembership(supabaseAdmin, userId);
+  if (!m) throw new Error("No active organization");
+  return { supabaseAdmin, orgId: m.orgId, role: m.role };
+}
+
+// Enforce class-level access for the caller's role. Owner/admin see every class
+// in the org; a manager (Teacher) may only touch classes they own. Scoped by
+// org so the teacher_id check can't be satisfied by another org's row.
+async function assertClassAccess(
+  admin: SupabaseClient<Database>,
+  orgId: string,
+  role: string,
+  userId: string,
+  classId: string,
+): Promise<void> {
+  if (role === "owner" || role === "admin") return;
+  const { data } = await admin
+    .from("classes")
+    .select("teacher_id")
+    .eq("id", classId)
+    .eq("org_id", orgId)
+    .maybeSingle();
+  if (!data || data.teacher_id !== userId) throw new Error("Forbidden");
 }
 
 // Verifies the student exists and is in the given class before writing
@@ -39,7 +61,8 @@ export const getClassRoster = createServerFn({ method: "GET" })
     z.object({ classId: z.string().uuid(), day: z.string().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    await assertClassAccess(supabaseAdmin, orgId, role, context.userId, data.classId);
     const day = data.day ?? new Date().toISOString().slice(0, 10);
     const [{ data: students }, { data: events }] = await Promise.all([
       supabaseAdmin
@@ -82,7 +105,8 @@ export const markAttendance = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    await assertClassAccess(supabaseAdmin, orgId, role, context.userId, data.classId);
     const day = data.day ?? new Date().toISOString().slice(0, 10);
     // Guard against filing attendance for a student who isn't in this class.
     // Scoping confirms the class belongs to the org but NOT that the student
@@ -137,7 +161,8 @@ export const setStudentNote = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    await assertClassAccess(supabaseAdmin, orgId, role, context.userId, data.classId);
     const day = data.day ?? new Date().toISOString().slice(0, 10);
     await assertStudentInClass(supabaseAdmin, orgId, data.studentId, data.classId);
     const { data: existing } = await supabaseAdmin
@@ -178,7 +203,8 @@ export const bulkMarkAllPresent = createServerFn({ method: "POST" })
     z.object({ classId: z.string().uuid(), day: z.string().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    await assertClassAccess(supabaseAdmin, orgId, role, context.userId, data.classId);
     const day = data.day ?? new Date().toISOString().slice(0, 10);
     const { data: students } = await supabaseAdmin
       .from("students")
@@ -217,7 +243,19 @@ export const getStudentHistory = createServerFn({ method: "GET" })
     z.object({ studentId: z.string().uuid(), days: z.number().int().min(7).max(180).optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    // A manager may only view history for students in one of their own classes.
+    // Resolve the student's class (org-scoped) and reuse the class access check.
+    if (role === "manager") {
+      const { data: student } = await supabaseAdmin
+        .from("students")
+        .select("class_id")
+        .eq("id", data.studentId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+      if (!student || !student.class_id) throw new Error("Forbidden");
+      await assertClassAccess(supabaseAdmin, orgId, role, context.userId, student.class_id);
+    }
     const days = data.days ?? 30;
     const since = new Date();
     since.setDate(since.getDate() - (days - 1));
@@ -238,7 +276,8 @@ export const exportClassAttendance = createServerFn({ method: "GET" })
     z.object({ classId: z.string().uuid(), from: z.string(), to: z.string() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    await assertClassAccess(supabaseAdmin, orgId, role, context.userId, data.classId);
     const [{ data: students }, { data: events }] = await Promise.all([
       supabaseAdmin
         .from("students")
@@ -270,13 +309,17 @@ export const getReport = createServerFn({ method: "GET" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
+    // Managers can only ever see their own classes: force the teacher filter to
+    // themselves and ignore any teacherId passed in. Owner/admin keep the
+    // optional teacherId filter.
+    const effectiveTeacherId = role === "manager" ? context.userId : data.teacherId;
     let classIds: string[] | null = null;
-    if (data.teacherId) {
+    if (effectiveTeacherId) {
       const { data: cs } = await supabaseAdmin
         .from("classes")
         .select("id")
-        .eq("teacher_id", data.teacherId)
+        .eq("teacher_id", effectiveTeacherId)
         .eq("org_id", orgId);
       classIds = (cs ?? []).map((c) => c.id);
     }
