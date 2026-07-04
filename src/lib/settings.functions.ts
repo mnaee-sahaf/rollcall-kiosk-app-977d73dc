@@ -58,7 +58,7 @@ export const lookupStudentPublic = createServerFn({ method: "GET" })
     if (!student || !student.active) return { found: false as const };
 
     const since = new Date();
-    since.setDate(since.getDate() - 13);
+    since.setDate(since.getDate() - 59);
     const sinceDay = since.toISOString().slice(0, 10);
     const { data: events } = await supabaseAdmin
       .from("attendance_events")
@@ -66,6 +66,19 @@ export const lookupStudentPublic = createServerFn({ method: "GET" })
       .eq("student_id", student.id)
       .gte("day", sinceDay)
       .order("day", { ascending: false });
+    const evts = events ?? [];
+    let present = 0;
+    let late = 0;
+    let absent = 0;
+    for (const e of evts) {
+      if (e.status === "present") present++;
+      else if (e.status === "late") late++;
+      else if (e.status === "absent") absent++;
+    }
+    const total = evts.length;
+    const rate = total === 0 ? 0 : Math.round(((present + late) / total) * 100);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const today = evts.find((e) => e.day === todayStr)?.status ?? null;
     return {
       found: true as const,
       student: {
@@ -76,6 +89,8 @@ export const lookupStudentPublic = createServerFn({ method: "GET" })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         grade: (student as any).classes?.grade ?? null,
       },
-      events: events ?? [],
+      events: evts,
+      stats: { present, late, absent, total, rate },
+      today,
     };
   });
