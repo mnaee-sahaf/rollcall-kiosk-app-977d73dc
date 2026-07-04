@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireOrgRole } from "@/lib/org-context";
+import { assertWithinPlan } from "@/lib/plans";
 import type { Database } from "@/integrations/supabase/types";
 
 function genPassword() {
@@ -69,6 +70,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     if (data.role === "admin" && callerRole !== "owner") {
       throw new Error("Only the owner can add administrators");
     }
+    await assertWithinPlan(supabaseAdmin, orgId, "staff");
 
     const existing = await findUserByEmail(supabaseAdmin, data.email);
     let userId: string;

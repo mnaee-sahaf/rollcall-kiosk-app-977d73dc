@@ -238,6 +238,7 @@ export type Database = {
           onboarded_at: string | null
           org_size: string | null
           phone: string | null
+          plan: string
           primary_role: string | null
           referral_source: string | null
           timezone: string
@@ -256,6 +257,7 @@ export type Database = {
           onboarded_at?: string | null
           org_size?: string | null
           phone?: string | null
+          plan?: string
           primary_role?: string | null
           referral_source?: string | null
           timezone?: string
@@ -274,6 +276,7 @@ export type Database = {
           onboarded_at?: string | null
           org_size?: string | null
           phone?: string | null
+          plan?: string
           primary_role?: string | null
           referral_source?: string | null
           timezone?: string

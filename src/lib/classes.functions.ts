@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveActiveMembership } from "@/lib/org-context";
+import { assertWithinPlan } from "@/lib/plans";
 
 // Resolve the caller's active org + role or throw. Every handler scopes to this.
 async function activeOrg(userId: string) {
@@ -70,6 +71,7 @@ export const createClass = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
     if (role === "manager") throw new Error("Only owners and admins can manage classes");
+    await assertWithinPlan(supabaseAdmin, orgId, "classes");
     const { data: row, error } = await supabaseAdmin
       .from("classes")
       .insert({
@@ -166,6 +168,7 @@ export const addStudent = createServerFn({ method: "POST" })
     const { data: cls } = await supabaseAdmin
       .from("classes").select("id").eq("id", data.classId).eq("org_id", orgId).maybeSingle();
     if (!cls) throw new Error("Class not found");
+    await assertWithinPlan(supabaseAdmin, orgId, "students");
     const { data: row, error } = await supabaseAdmin
       .from("students")
       .insert({
@@ -203,6 +206,7 @@ export const bulkAddStudents = createServerFn({ method: "POST" })
     const { data: cls } = await supabaseAdmin
       .from("classes").select("id").eq("id", data.classId).eq("org_id", orgId).maybeSingle();
     if (!cls) throw new Error("Class not found");
+    await assertWithinPlan(supabaseAdmin, orgId, "students", data.students.length);
     const rows = data.students.map((s) => ({
       org_id: orgId,
       class_id: data.classId,
