@@ -7,15 +7,13 @@ export const Route = createFileRoute("/_authenticated")({
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/auth" });
 
-    // If the user has no role yet, send them to the welcome chooser so they
-    // can create or join an org. /app/onboarding handles the post-create wizard.
+    // If the user has no role yet, send them to the signup wizard so they can
+    // create or join an organization.
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", data.user.id);
     const hasRole = (roles ?? []).length > 0;
-    // Role-less users go to /signup: a mid-signup admin finishes creating the
-    // org there; a stale account (org already exists) gets a dead-end message.
     if (!hasRole) {
       throw redirect({ to: "/signup" });
     }

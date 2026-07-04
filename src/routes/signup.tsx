@@ -93,7 +93,7 @@ const REFERRAL_SOURCES = [
   "Other",
 ];
 
-type Phase = "loading" | "wizard" | "stale";
+type Phase = "loading" | "wizard" | "stale" | "closed";
 
 function SignupWizard() {
   const navigate = useNavigate();
@@ -130,9 +130,10 @@ function SignupWizard() {
         ]);
         const user = userData.user;
         if (exists) {
-          // Signup is closed. Route based on who's here.
+          // Signup is closed (single-tenant). Explain instead of silently
+          // bouncing to a context-free sign-in form.
           if (!user) {
-            navigate({ to: "/auth", replace: true });
+            setPhase("closed");
             return;
           }
           const { data: roles } = await supabase
@@ -217,6 +218,26 @@ function SignupWizard() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fcfbf8] text-sm text-muted-foreground">
         Loading…
+      </div>
+    );
+  }
+
+  if (phase === "closed") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#fcfbf8] px-4 text-center">
+        <div className="max-w-md rounded-2xl border bg-white p-8 shadow-sm">
+          <div className="mb-4 flex justify-center">
+            <Logo />
+          </div>
+          <h1 className="text-2xl font-bold">This RollCall already has an organization</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            A new organization can't be created here. If you're a teacher, ask your administrator
+            for a login. Already have an account?
+          </p>
+          <Button asChild className="mt-6">
+            <Link to="/auth">Sign in</Link>
+          </Button>
+        </div>
       </div>
     );
   }
