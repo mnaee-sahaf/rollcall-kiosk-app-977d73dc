@@ -3,12 +3,22 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { resolveActiveOrgId } from "@/lib/org-context";
+
+// Resolve the caller's active org or throw. Every handler scopes to this.
+async function activeOrg(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const orgId = await resolveActiveOrgId(supabaseAdmin, userId);
+  if (!orgId) throw new Error("No active organization");
+  return { supabaseAdmin, orgId };
+}
 
 // Verifies the student exists and is in the given class before writing
-// attendance. The RLS-scoped client also blocks students outside the caller's
-// classes, so a not-found result throws the same friendly error.
+// attendance. Scoped by org so a crafted request can't reach another org's
+// student; a not-found result throws the same friendly error.
 async function assertStudentInClass(
   supabase: SupabaseClient<Database>,
+  orgId: string,
   studentId: string,
   classId: string,
 ): Promise<void> {
@@ -16,6 +26,7 @@ async function assertStudentInClass(
     .from("students")
     .select("class_id")
     .eq("id", studentId)
+    .eq("org_id", orgId)
     .maybeSingle();
   if (!student || student.class_id !== classId) {
     throw new Error("Student is not in this class");
@@ -28,18 +39,20 @@ export const getClassRoster = createServerFn({ method: "GET" })
     z.object({ classId: z.string().uuid(), day: z.string().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const day = data.day ?? new Date().toISOString().slice(0, 10);
     const [{ data: students }, { data: events }] = await Promise.all([
-      supabase
+      supabaseAdmin
         .from("students")
         .select("id, full_name, external_id, qr_token, active")
         .eq("class_id", data.classId)
+        .eq("org_id", orgId)
         .order("full_name"),
-      supabase
+      supabaseAdmin
         .from("attendance_events")
         .select("student_id, status, note")
         .eq("class_id", data.classId)
+        .eq("org_id", orgId)
         .eq("day", day),
     ]);
     const byStudent = new Map(
@@ -69,37 +82,41 @@ export const markAttendance = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const day = data.day ?? new Date().toISOString().slice(0, 10);
     // Guard against filing attendance for a student who isn't in this class.
-    // RLS confirms the teacher owns class_id but NOT that the student belongs
-    // to it, so without this a crafted request could corrupt a student's day.
-    await assertStudentInClass(supabase, data.studentId, data.classId);
-    const { data: existing } = await supabase
+    // Scoping confirms the class belongs to the org but NOT that the student
+    // belongs to it, so without this a crafted request could corrupt a
+    // student's day.
+    await assertStudentInClass(supabaseAdmin, orgId, data.studentId, data.classId);
+    const { data: existing } = await supabaseAdmin
       .from("attendance_events")
       .select("id")
       .eq("student_id", data.studentId)
+      .eq("org_id", orgId)
       .eq("day", day)
       .maybeSingle();
     if (existing) {
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from("attendance_events")
         .update({
           status: data.status,
           method: "manual",
-          marked_by: userId,
+          marked_by: context.userId,
           note: data.note ?? null,
         })
-        .eq("id", existing.id);
+        .eq("id", existing.id)
+        .eq("org_id", orgId);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabase.from("attendance_events").insert({
+      const { error } = await supabaseAdmin.from("attendance_events").insert({
+        org_id: orgId,
         student_id: data.studentId,
         class_id: data.classId,
         day,
         status: data.status,
         method: "manual",
-        marked_by: userId,
+        marked_by: context.userId,
         note: data.note ?? null,
       });
       if (error) throw new Error(error.message);
@@ -120,31 +137,34 @@ export const setStudentNote = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const day = data.day ?? new Date().toISOString().slice(0, 10);
-    await assertStudentInClass(supabase, data.studentId, data.classId);
-    const { data: existing } = await supabase
+    await assertStudentInClass(supabaseAdmin, orgId, data.studentId, data.classId);
+    const { data: existing } = await supabaseAdmin
       .from("attendance_events")
       .select("id")
       .eq("student_id", data.studentId)
+      .eq("org_id", orgId)
       .eq("day", day)
       .maybeSingle();
     if (existing) {
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from("attendance_events")
-        .update({ note: data.note, marked_by: userId })
-        .eq("id", existing.id);
+        .update({ note: data.note, marked_by: context.userId })
+        .eq("id", existing.id)
+        .eq("org_id", orgId);
       if (error) throw new Error(error.message);
       return { ok: true };
     }
     // No event yet: create an 'absent' row carrying the note so it persists.
-    const { error } = await supabase.from("attendance_events").insert({
+    const { error } = await supabaseAdmin.from("attendance_events").insert({
+      org_id: orgId,
       student_id: data.studentId,
       class_id: data.classId,
       day,
       status: "absent",
       method: "manual",
-      marked_by: userId,
+      marked_by: context.userId,
       note: data.note,
     });
     if (error) throw new Error(error.message);
@@ -158,31 +178,34 @@ export const bulkMarkAllPresent = createServerFn({ method: "POST" })
     z.object({ classId: z.string().uuid(), day: z.string().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const day = data.day ?? new Date().toISOString().slice(0, 10);
-    const { data: students } = await supabase
+    const { data: students } = await supabaseAdmin
       .from("students")
       .select("id")
       .eq("class_id", data.classId)
+      .eq("org_id", orgId)
       .eq("active", true);
-    const { data: existing } = await supabase
+    const { data: existing } = await supabaseAdmin
       .from("attendance_events")
       .select("student_id")
       .eq("class_id", data.classId)
+      .eq("org_id", orgId)
       .eq("day", day);
     const have = new Set((existing ?? []).map((e) => e.student_id));
     const toInsert = (students ?? [])
       .filter((s) => !have.has(s.id))
       .map((s) => ({
+        org_id: orgId,
         student_id: s.id,
         class_id: data.classId,
         day,
         status: "present" as const,
         method: "manual" as const,
-        marked_by: userId,
+        marked_by: context.userId,
       }));
     if (toInsert.length > 0) {
-      const { error } = await supabase.from("attendance_events").insert(toInsert);
+      const { error } = await supabaseAdmin.from("attendance_events").insert(toInsert);
       if (error) throw new Error(error.message);
     }
     return { ok: true, inserted: toInsert.length };
@@ -194,15 +217,16 @@ export const getStudentHistory = createServerFn({ method: "GET" })
     z.object({ studentId: z.string().uuid(), days: z.number().int().min(7).max(180).optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const days = data.days ?? 30;
     const since = new Date();
     since.setDate(since.getDate() - (days - 1));
     const sinceDay = since.toISOString().slice(0, 10);
-    const { data: events } = await supabase
+    const { data: events } = await supabaseAdmin
       .from("attendance_events")
       .select("day, status, note, method")
       .eq("student_id", data.studentId)
+      .eq("org_id", orgId)
       .gte("day", sinceDay)
       .order("day", { ascending: false });
     return events ?? [];
@@ -214,17 +238,19 @@ export const exportClassAttendance = createServerFn({ method: "GET" })
     z.object({ classId: z.string().uuid(), from: z.string(), to: z.string() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const [{ data: students }, { data: events }] = await Promise.all([
-      supabase
+      supabaseAdmin
         .from("students")
         .select("id, full_name, external_id")
         .eq("class_id", data.classId)
+        .eq("org_id", orgId)
         .order("full_name"),
-      supabase
+      supabaseAdmin
         .from("attendance_events")
         .select("student_id, day, status, note, method")
         .eq("class_id", data.classId)
+        .eq("org_id", orgId)
         .gte("day", data.from)
         .lte("day", data.to),
     ]);
@@ -244,10 +270,14 @@ export const getReport = createServerFn({ method: "GET" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     let classIds: string[] | null = null;
     if (data.teacherId) {
-      const { data: cs } = await supabase.from("classes").select("id").eq("teacher_id", data.teacherId);
+      const { data: cs } = await supabaseAdmin
+        .from("classes")
+        .select("id")
+        .eq("teacher_id", data.teacherId)
+        .eq("org_id", orgId);
       classIds = (cs ?? []).map((c) => c.id);
     }
     // Supabase caps a single select at 1000 rows by default, which silently
@@ -264,9 +294,10 @@ export const getReport = createServerFn({ method: "GET" })
     };
     const events: EventRow[] = [];
     for (let offset = 0; ; offset += PAGE) {
-      let q = supabase
+      let q = supabaseAdmin
         .from("attendance_events")
         .select("id, student_id, class_id, status, day, method")
+        .eq("org_id", orgId)
         .gte("day", data.from)
         .lte("day", data.to)
         .order("day", { ascending: true })
@@ -280,8 +311,14 @@ export const getReport = createServerFn({ method: "GET" })
       if (!page || page.length < PAGE) break;
     }
 
-    const { data: classes } = await supabase.from("classes").select("id, name, teacher_id");
-    const { data: students } = await supabase.from("students").select("id, full_name, class_id");
+    const { data: classes } = await supabaseAdmin
+      .from("classes")
+      .select("id, name, teacher_id")
+      .eq("org_id", orgId);
+    const { data: students } = await supabaseAdmin
+      .from("students")
+      .select("id, full_name, class_id")
+      .eq("org_id", orgId);
 
     const byDay = new Map<string, { present: number; total: number }>();
     const byClass = new Map<string, { present: number; total: number }>();

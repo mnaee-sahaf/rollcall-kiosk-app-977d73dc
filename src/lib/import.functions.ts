@@ -1,49 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-async function assertAdmin(supabase: any, userId: string) {
-  const { data } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin");
-  if (!data || data.length === 0) throw new Error("Forbidden: admin only");
-}
-
-export const importTeachers = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z
-      .object({
-        rows: z
-          .array(z.object({ email: z.string().email(), full_name: z.string().optional() }))
-          .max(500),
-      })
-      .parse(d),
-  )
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const results: Array<{ email: string; ok: boolean; error?: string; token?: string }> = [];
-    for (const row of data.rows) {
-      try {
-        const token =
-          crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-        const { error } = await context.supabase
-          .from("teacher_invites")
-          .insert({ email: row.email, token, invited_by: context.userId });
-        if (error) throw new Error(error.message);
-        results.push({ email: row.email, ok: true, token });
-      } catch (err) {
-        results.push({
-          email: row.email,
-          ok: false,
-          error: err instanceof Error ? err.message : "Failed",
-        });
-      }
-    }
-    return { results };
-  });
+import { resolveActiveOrgId } from "@/lib/org-context";
 
 export const importStudents = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -64,13 +22,18 @@ export const importStudents = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const orgId = await resolveActiveOrgId(supabaseAdmin, context.userId);
+    if (!orgId) throw new Error("No active organization");
+
     const classCache = new Map<string, string>();
     const results: Array<{ row: number; ok: boolean; error?: string }> = [];
 
-    // Preload existing classes
-    const { data: existing } = await supabaseAdmin.from("classes").select("id, name");
+    // Preload existing classes in this org.
+    const { data: existing } = await supabaseAdmin
+      .from("classes")
+      .select("id, name")
+      .eq("org_id", orgId);
     for (const c of existing ?? []) classCache.set(c.name.toLowerCase(), c.id);
 
     for (let i = 0; i < data.rows.length; i++) {
@@ -80,7 +43,7 @@ export const importStudents = createServerFn({ method: "POST" })
         if (!classId) {
           const { data: newCls, error: ce } = await supabaseAdmin
             .from("classes")
-            .insert({ name: r.class_name, grade: r.grade ?? null, teacher_id: context.userId })
+            .insert({ org_id: orgId, name: r.class_name, grade: r.grade ?? null, teacher_id: context.userId })
             .select()
             .single();
           if (ce) throw new Error(ce.message);
@@ -88,6 +51,7 @@ export const importStudents = createServerFn({ method: "POST" })
           classCache.set(r.class_name.toLowerCase(), classId!);
         }
         const { error: se } = await supabaseAdmin.from("students").insert({
+          org_id: orgId,
           class_id: classId,
           full_name: r.full_name,
           external_id: r.external_id ?? null,
@@ -95,11 +59,7 @@ export const importStudents = createServerFn({ method: "POST" })
         if (se) throw new Error(se.message);
         results.push({ row: i + 1, ok: true });
       } catch (err) {
-        results.push({
-          row: i + 1,
-          ok: false,
-          error: err instanceof Error ? err.message : "Failed",
-        });
+        results.push({ row: i + 1, ok: false, error: err instanceof Error ? err.message : "Failed" });
       }
     }
     return { results };
