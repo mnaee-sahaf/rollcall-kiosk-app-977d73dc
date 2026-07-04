@@ -286,6 +286,7 @@ export type Database = {
           full_name: string | null
           id: string
           last_active_org_id: string | null
+          must_change_password: boolean
           school_name: string | null
           updated_at: string
         }
@@ -294,6 +295,7 @@ export type Database = {
           full_name?: string | null
           id: string
           last_active_org_id?: string | null
+          must_change_password?: boolean
           school_name?: string | null
           updated_at?: string
         }
@@ -302,6 +304,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           last_active_org_id?: string | null
+          must_change_password?: boolean
           school_name?: string | null
           updated_at?: string
         }
@@ -458,6 +461,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      has_org_role: {
+        Args: { org: string; roles: Database["public"]["Enums"]["app_role"][] }
+        Returns: boolean
+      }
       is_org_member: { Args: { org: string }; Returns: boolean }
     }
     Enums: {
