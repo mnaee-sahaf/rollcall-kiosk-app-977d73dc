@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StudentRouteImport } from './routes/student'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -30,6 +31,11 @@ import { Route as AuthenticatedAppClassesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAppClassesClassIdRouteImport } from './routes/_authenticated/app.classes.$classId'
 import { Route as AuthenticatedAppClassesClassIdQrRouteImport } from './routes/_authenticated/app.classes.$classId.qr'
 
+const StudentRoute = StudentRouteImport.update({
+  id: '/student',
+  path: '/student',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/demo': typeof DemoRoute
   '/signup': typeof SignupRoute
+  '/student': typeof StudentRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
@@ -164,6 +171,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/demo': typeof DemoRoute
   '/signup': typeof SignupRoute
+  '/student': typeof StudentRoute
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/demo': typeof DemoRoute
   '/signup': typeof SignupRoute
+  '/student': typeof StudentRoute
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/demo'
     | '/signup'
+    | '/student'
     | '/app'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/demo'
     | '/signup'
+    | '/student'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
     | '/app/classes'
@@ -251,6 +262,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/demo'
     | '/signup'
+    | '/student'
     | '/_authenticated/app'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
@@ -274,12 +286,20 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   DemoRoute: typeof DemoRoute
   SignupRoute: typeof SignupRoute
+  StudentRoute: typeof StudentRoute
   KioskTokenRoute: typeof KioskTokenRoute
   LookupQrTokenRoute: typeof LookupQrTokenRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/student': {
+      id: '/student'
+      path: '/student'
+      fullPath: '/student'
+      preLoaderRoute: typeof StudentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
@@ -499,6 +519,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   DemoRoute: DemoRoute,
   SignupRoute: SignupRoute,
+  StudentRoute: StudentRoute,
   KioskTokenRoute: KioskTokenRoute,
   LookupQrTokenRoute: LookupQrTokenRoute,
 }
