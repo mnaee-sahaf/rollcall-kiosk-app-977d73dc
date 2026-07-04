@@ -3,20 +3,18 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async ({ location }) => {
+  beforeLoad: async () => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/auth" });
 
-    // If the user has no role yet, send them to the welcome chooser so they
-    // can create or join an org. /app/onboarding handles the post-create wizard.
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.user.id);
-    const hasRole = (roles ?? []).length > 0;
-    if (!hasRole && !location.pathname.startsWith("/welcome")) {
-      throw redirect({ to: "/welcome" });
-    }
+    // A signed-in user with no org yet (mid-signup, or removed from their only
+    // org) goes to /signup to create one.
+    const { data: mems } = await supabase
+      .from("memberships")
+      .select("org_id")
+      .eq("user_id", data.user.id)
+      .limit(1);
+    if (!mems || mems.length === 0) throw redirect({ to: "/signup" });
 
     return { user: data.user };
   },

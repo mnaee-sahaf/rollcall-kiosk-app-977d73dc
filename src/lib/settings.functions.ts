@@ -1,23 +1,29 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolveActiveOrgId } from "@/lib/org-context";
 
-export const getSettings = createServerFn({ method: "GET" }).handler(async () => {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
-    .from("school_settings")
-    .select("*")
-    .eq("singleton", true)
-    .maybeSingle();
-  return data;
-});
+// Settings now live on the active organization (no more singleton).
+export const getSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const orgId = await resolveActiveOrgId(supabaseAdmin, context.userId);
+    if (!orgId) return null;
+    const { data } = await supabaseAdmin
+      .from("organizations")
+      .select("*")
+      .eq("id", orgId)
+      .maybeSingle();
+    return data;
+  });
 
 export const updateSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
     z
       .object({
-        school_name: z.string().max(120).nullable().optional(),
+        name: z.string().min(2).max(120).optional(),
         logo_url: z.string().url().nullable().optional(),
         day_cutoff_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
         absent_after_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
@@ -26,24 +32,21 @@ export const updateSettings = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: adminRows } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin");
-    if (!adminRows || adminRows.length === 0) throw new Error("Forbidden: admin only");
-    const { data: row, error } = await supabase
-      .from("school_settings")
-      .update({ ...data, updated_by: userId, updated_at: new Date().toISOString() })
-      .eq("singleton", true)
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const orgId = await resolveActiveOrgId(supabaseAdmin, context.userId);
+    if (!orgId) throw new Error("No active organization");
+    const { data: row, error } = await supabaseAdmin
+      .from("organizations")
+      .update(data)
+      .eq("id", orgId)
       .select()
       .single();
     if (error) throw new Error(error.message);
     return row;
   });
 
-// PUBLIC — parent scans QR card with phone, sees minimal info.
+// PUBLIC — parent scans a student QR card, sees minimal info. Token is unique
+// to one student in one org, so no extra org scoping is needed.
 export const lookupStudentPublic = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ qrToken: z.string().min(8).max(80) }).parse(d))
   .handler(async ({ data }) => {

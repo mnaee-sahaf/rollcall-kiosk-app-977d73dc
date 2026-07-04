@@ -9,13 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as DemoRouteImport } from './routes/demo'
-import { Route as CreateOrganizationRouteImport } from './routes/create-organization'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as WelcomeIndexRouteImport } from './routes/welcome.index'
-import { Route as WelcomeCreateRouteImport } from './routes/welcome.create'
 import { Route as LookupQrTokenRouteImport } from './routes/lookup.$qrToken'
 import { Route as KioskTokenRouteImport } from './routes/kiosk.$token'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
@@ -28,18 +26,17 @@ import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAppOnboardingRouteImport } from './routes/_authenticated/app.onboarding'
 import { Route as AuthenticatedAppImportRouteImport } from './routes/_authenticated/app.import'
 import { Route as AuthenticatedAppClassesRouteImport } from './routes/_authenticated/app.classes'
-import { Route as AuthenticatedAppInviteTokenRouteImport } from './routes/_authenticated/app.invite.$token'
 import { Route as AuthenticatedAppClassesClassIdRouteImport } from './routes/_authenticated/app.classes.$classId'
 import { Route as AuthenticatedAppClassesClassIdQrRouteImport } from './routes/_authenticated/app.classes.$classId.qr'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CreateOrganizationRoute = CreateOrganizationRouteImport.update({
-  id: '/create-organization',
-  path: '/create-organization',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -54,16 +51,6 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WelcomeIndexRoute = WelcomeIndexRouteImport.update({
-  id: '/welcome/',
-  path: '/welcome/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WelcomeCreateRoute = WelcomeCreateRouteImport.update({
-  id: '/welcome/create',
-  path: '/welcome/create',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LookupQrTokenRoute = LookupQrTokenRouteImport.update({
@@ -131,12 +118,6 @@ const AuthenticatedAppClassesRoute = AuthenticatedAppClassesRouteImport.update({
   path: '/classes',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
-const AuthenticatedAppInviteTokenRoute =
-  AuthenticatedAppInviteTokenRouteImport.update({
-    id: '/invite/$token',
-    path: '/invite/$token',
-    getParentRoute: () => AuthenticatedAppRoute,
-  } as any)
 const AuthenticatedAppClassesClassIdRoute =
   AuthenticatedAppClassesClassIdRouteImport.update({
     id: '/$classId',
@@ -153,13 +134,11 @@ const AuthenticatedAppClassesClassIdQrRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/create-organization': typeof CreateOrganizationRoute
   '/demo': typeof DemoRoute
+  '/signup': typeof SignupRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
-  '/welcome/create': typeof WelcomeCreateRoute
-  '/welcome/': typeof WelcomeIndexRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/app/import': typeof AuthenticatedAppImportRoute
   '/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -170,18 +149,15 @@ export interface FileRoutesByFullPath {
   '/app/waitlist': typeof AuthenticatedAppWaitlistRoute
   '/app/': typeof AuthenticatedAppIndexRoute
   '/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
-  '/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
   '/app/classes/$classId/qr': typeof AuthenticatedAppClassesClassIdQrRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/create-organization': typeof CreateOrganizationRoute
   '/demo': typeof DemoRoute
+  '/signup': typeof SignupRoute
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
-  '/welcome/create': typeof WelcomeCreateRoute
-  '/welcome': typeof WelcomeIndexRoute
   '/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/app/import': typeof AuthenticatedAppImportRoute
   '/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -192,7 +168,6 @@ export interface FileRoutesByTo {
   '/app/waitlist': typeof AuthenticatedAppWaitlistRoute
   '/app': typeof AuthenticatedAppIndexRoute
   '/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
-  '/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
   '/app/classes/$classId/qr': typeof AuthenticatedAppClassesClassIdQrRoute
 }
 export interface FileRoutesById {
@@ -200,13 +175,11 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
-  '/create-organization': typeof CreateOrganizationRoute
   '/demo': typeof DemoRoute
+  '/signup': typeof SignupRoute
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/kiosk/$token': typeof KioskTokenRoute
   '/lookup/$qrToken': typeof LookupQrTokenRoute
-  '/welcome/create': typeof WelcomeCreateRoute
-  '/welcome/': typeof WelcomeIndexRoute
   '/_authenticated/app/classes': typeof AuthenticatedAppClassesRouteWithChildren
   '/_authenticated/app/import': typeof AuthenticatedAppImportRoute
   '/_authenticated/app/onboarding': typeof AuthenticatedAppOnboardingRoute
@@ -217,7 +190,6 @@ export interface FileRoutesById {
   '/_authenticated/app/waitlist': typeof AuthenticatedAppWaitlistRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
   '/_authenticated/app/classes/$classId': typeof AuthenticatedAppClassesClassIdRouteWithChildren
-  '/_authenticated/app/invite/$token': typeof AuthenticatedAppInviteTokenRoute
   '/_authenticated/app/classes/$classId/qr': typeof AuthenticatedAppClassesClassIdQrRoute
 }
 export interface FileRouteTypes {
@@ -225,13 +197,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
-    | '/create-organization'
     | '/demo'
+    | '/signup'
     | '/app'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
-    | '/welcome/create'
-    | '/welcome/'
     | '/app/classes'
     | '/app/import'
     | '/app/onboarding'
@@ -242,18 +212,15 @@ export interface FileRouteTypes {
     | '/app/waitlist'
     | '/app/'
     | '/app/classes/$classId'
-    | '/app/invite/$token'
     | '/app/classes/$classId/qr'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
-    | '/create-organization'
     | '/demo'
+    | '/signup'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
-    | '/welcome/create'
-    | '/welcome'
     | '/app/classes'
     | '/app/import'
     | '/app/onboarding'
@@ -264,20 +231,17 @@ export interface FileRouteTypes {
     | '/app/waitlist'
     | '/app'
     | '/app/classes/$classId'
-    | '/app/invite/$token'
     | '/app/classes/$classId/qr'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
-    | '/create-organization'
     | '/demo'
+    | '/signup'
     | '/_authenticated/app'
     | '/kiosk/$token'
     | '/lookup/$qrToken'
-    | '/welcome/create'
-    | '/welcome/'
     | '/_authenticated/app/classes'
     | '/_authenticated/app/import'
     | '/_authenticated/app/onboarding'
@@ -288,7 +252,6 @@ export interface FileRouteTypes {
     | '/_authenticated/app/waitlist'
     | '/_authenticated/app/'
     | '/_authenticated/app/classes/$classId'
-    | '/_authenticated/app/invite/$token'
     | '/_authenticated/app/classes/$classId/qr'
   fileRoutesById: FileRoutesById
 }
@@ -296,28 +259,26 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  CreateOrganizationRoute: typeof CreateOrganizationRoute
   DemoRoute: typeof DemoRoute
+  SignupRoute: typeof SignupRoute
   KioskTokenRoute: typeof KioskTokenRoute
   LookupQrTokenRoute: typeof LookupQrTokenRoute
-  WelcomeCreateRoute: typeof WelcomeCreateRoute
-  WelcomeIndexRoute: typeof WelcomeIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/demo': {
       id: '/demo'
       path: '/demo'
       fullPath: '/demo'
       preLoaderRoute: typeof DemoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/create-organization': {
-      id: '/create-organization'
-      path: '/create-organization'
-      fullPath: '/create-organization'
-      preLoaderRoute: typeof CreateOrganizationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -339,20 +300,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/welcome/': {
-      id: '/welcome/'
-      path: '/welcome'
-      fullPath: '/welcome/'
-      preLoaderRoute: typeof WelcomeIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/welcome/create': {
-      id: '/welcome/create'
-      path: '/welcome/create'
-      fullPath: '/welcome/create'
-      preLoaderRoute: typeof WelcomeCreateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lookup/$qrToken': {
@@ -439,13 +386,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppClassesRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
-    '/_authenticated/app/invite/$token': {
-      id: '/_authenticated/app/invite/$token'
-      path: '/invite/$token'
-      fullPath: '/app/invite/$token'
-      preLoaderRoute: typeof AuthenticatedAppInviteTokenRouteImport
-      parentRoute: typeof AuthenticatedAppRoute
-    }
     '/_authenticated/app/classes/$classId': {
       id: '/_authenticated/app/classes/$classId'
       path: '/$classId'
@@ -503,7 +443,6 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppTeachersRoute: typeof AuthenticatedAppTeachersRoute
   AuthenticatedAppWaitlistRoute: typeof AuthenticatedAppWaitlistRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
-  AuthenticatedAppInviteTokenRoute: typeof AuthenticatedAppInviteTokenRoute
 }
 
 const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
@@ -516,7 +455,6 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppTeachersRoute: AuthenticatedAppTeachersRoute,
   AuthenticatedAppWaitlistRoute: AuthenticatedAppWaitlistRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
-  AuthenticatedAppInviteTokenRoute: AuthenticatedAppInviteTokenRoute,
 }
 
 const AuthenticatedAppRouteWithChildren =
@@ -537,12 +475,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  CreateOrganizationRoute: CreateOrganizationRoute,
   DemoRoute: DemoRoute,
+  SignupRoute: SignupRoute,
   KioskTokenRoute: KioskTokenRoute,
   LookupQrTokenRoute: LookupQrTokenRoute,
-  WelcomeCreateRoute: WelcomeCreateRoute,
-  WelcomeIndexRoute: WelcomeIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

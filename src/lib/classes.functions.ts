@@ -1,14 +1,24 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolveActiveOrgId } from "@/lib/org-context";
+
+// Resolve the caller's active org or throw. Every handler scopes to this.
+async function activeOrg(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const orgId = await resolveActiveOrgId(supabaseAdmin, userId);
+  if (!orgId) throw new Error("No active organization");
+  return { supabaseAdmin, orgId };
+}
 
 export const listClasses = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase } = context;
-    const { data, error } = await supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { data, error } = await supabaseAdmin
       .from("classes")
       .select("id, name, grade, teacher_id, created_at")
+      .eq("org_id", orgId)
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data;
@@ -17,19 +27,13 @@ export const listClasses = createServerFn({ method: "GET" })
 export const listClassesWithMeta = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context;
-    const { data: adminRows } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin");
-    if (!adminRows || adminRows.length === 0) throw new Error("Forbidden: admin only");
-    const { data: classes } = await supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { data: classes } = await supabaseAdmin
       .from("classes")
       .select("id, name, grade, teacher_id, created_at")
+      .eq("org_id", orgId)
       .order("name");
-    const ids = (classes ?? []).map((c) => c.teacher_id);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const ids = (classes ?? []).map((c) => c.teacher_id).filter((x): x is string => !!x);
     const { data: profs } = await supabaseAdmin
       .from("profiles")
       .select("id, full_name")
@@ -37,16 +41,16 @@ export const listClassesWithMeta = createServerFn({ method: "GET" })
     const profMap = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
     const { data: counts } = await supabaseAdmin
       .from("students")
-      .select("class_id");
+      .select("class_id")
+      .eq("org_id", orgId);
     const countMap = new Map<string, number>();
     for (const s of counts ?? []) countMap.set(s.class_id, (countMap.get(s.class_id) ?? 0) + 1);
     return (classes ?? []).map((c) => ({
       ...c,
-      teacher_name: profMap.get(c.teacher_id) ?? null,
+      teacher_name: c.teacher_id ? (profMap.get(c.teacher_id) ?? null) : null,
       student_count: countMap.get(c.id) ?? 0,
     }));
   });
-
 
 export const createClass = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -60,13 +64,14 @@ export const createClass = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: row, error } = await supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { data: row, error } = await supabaseAdmin
       .from("classes")
       .insert({
+        org_id: orgId,
         name: data.name,
         grade: data.grade ?? null,
-        teacher_id: data.teacherId ?? userId,
+        teacher_id: data.teacherId ?? context.userId,
       })
       .select()
       .single();
@@ -87,11 +92,16 @@ export const updateClass = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const patch: { name?: string; grade?: string | null; teacher_id?: string } = {};
     if (data.name !== undefined) patch.name = data.name;
     if (data.grade !== undefined) patch.grade = data.grade;
     if (data.teacherId !== undefined) patch.teacher_id = data.teacherId;
-    const { error } = await context.supabase.from("classes").update(patch).eq("id", data.classId);
+    const { error } = await supabaseAdmin
+      .from("classes")
+      .update(patch)
+      .eq("id", data.classId)
+      .eq("org_id", orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -100,7 +110,12 @@ export const deleteClass = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ classId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("classes").delete().eq("id", data.classId);
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { error } = await supabaseAdmin
+      .from("classes")
+      .delete()
+      .eq("id", data.classId)
+      .eq("org_id", orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -109,13 +124,14 @@ export const getClass = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ classId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const [{ data: cls, error: e1 }, { data: students, error: e2 }] = await Promise.all([
-      supabase.from("classes").select("*").eq("id", data.classId).maybeSingle(),
-      supabase
+      supabaseAdmin.from("classes").select("*").eq("id", data.classId).eq("org_id", orgId).maybeSingle(),
+      supabaseAdmin
         .from("students")
         .select("*")
         .eq("class_id", data.classId)
+        .eq("org_id", orgId)
         .order("full_name", { ascending: true }),
     ]);
     if (e1) throw new Error(e1.message);
@@ -136,10 +152,15 @@ export const addStudent = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
-    const { data: row, error } = await supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    // The class must belong to the active org.
+    const { data: cls } = await supabaseAdmin
+      .from("classes").select("id").eq("id", data.classId).eq("org_id", orgId).maybeSingle();
+    if (!cls) throw new Error("Class not found");
+    const { data: row, error } = await supabaseAdmin
       .from("students")
       .insert({
+        org_id: orgId,
         class_id: data.classId,
         full_name: data.full_name,
         external_id: data.external_id ?? null,
@@ -169,13 +190,17 @@ export const bulkAddStudents = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { data: cls } = await supabaseAdmin
+      .from("classes").select("id").eq("id", data.classId).eq("org_id", orgId).maybeSingle();
+    if (!cls) throw new Error("Class not found");
     const rows = data.students.map((s) => ({
+      org_id: orgId,
       class_id: data.classId,
       full_name: s.full_name,
       external_id: s.external_id ?? null,
     }));
-    const { data: inserted, error } = await supabase.from("students").insert(rows).select("id");
+    const { data: inserted, error } = await supabaseAdmin.from("students").insert(rows).select("id");
     if (error) throw new Error(error.message);
     return { inserted: inserted?.length ?? 0 };
   });
@@ -197,6 +222,7 @@ export const updateStudent = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const patch: {
       full_name?: string;
       external_id?: string | null;
@@ -215,10 +241,11 @@ export const updateStudent = createServerFn({ method: "POST" })
     if (data.guardian_phone !== undefined) patch.guardian_phone = data.guardian_phone;
     if (data.photo_url !== undefined) patch.photo_url = data.photo_url;
 
-    const { error } = await context.supabase
+    const { error } = await supabaseAdmin
       .from("students")
       .update(patch)
-      .eq("id", data.studentId);
+      .eq("id", data.studentId)
+      .eq("org_id", orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -229,64 +256,52 @@ function genToken() {
     .join("");
 }
 
-/**
- * Revoke the student's current QR and issue a new one.
- * Writes a history row so old prints can be identified at the kiosk
- * as "replaced" rather than "unknown".
- */
+// Revoke the student's current QR and issue a new one (history row kept so old
+// prints read as "replaced" at the kiosk).
 export const rotateStudentQr = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z
-      .object({
-        studentId: z.string().uuid(),
-        reason: z.string().max(200).optional(),
-      })
-      .parse(d),
+    z.object({ studentId: z.string().uuid(), reason: z.string().max(200).optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: current, error: cErr } = await supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { data: current, error: cErr } = await supabaseAdmin
       .from("students")
       .select("qr_token")
       .eq("id", data.studentId)
+      .eq("org_id", orgId)
       .maybeSingle();
     if (cErr) throw new Error(cErr.message);
     if (!current) throw new Error("Student not found");
 
-    // Make sure a history row exists for the current token, then revoke it.
-    await supabase
+    await supabaseAdmin
       .from("student_qr_tokens")
       .upsert(
-        { student_id: data.studentId, token: current.qr_token },
+        { student_id: data.studentId, token: current.qr_token, org_id: orgId },
         { onConflict: "token", ignoreDuplicates: true },
       );
-    await supabase
+    await supabaseAdmin
       .from("student_qr_tokens")
-      .update({
-        revoked_at: new Date().toISOString(),
-        revoked_by: userId,
-        reason: data.reason ?? null,
-      })
+      .update({ revoked_at: new Date().toISOString(), revoked_by: context.userId, reason: data.reason ?? null })
       .eq("token", current.qr_token)
       .is("revoked_at", null);
 
-    // Issue + persist new token
     const newToken = genToken();
-    const { data: row, error: uErr } = await supabase
+    const { data: row, error: uErr } = await supabaseAdmin
       .from("students")
       .update({ qr_token: newToken })
       .eq("id", data.studentId)
+      .eq("org_id", orgId)
       .select()
       .single();
     if (uErr) throw new Error(uErr.message);
 
-    await supabase.from("student_qr_tokens").insert({
+    await supabaseAdmin.from("student_qr_tokens").insert({
       student_id: data.studentId,
       token: newToken,
-      issued_by: userId,
+      issued_by: context.userId,
+      org_id: orgId,
     });
-
     return row;
   });
 
@@ -294,19 +309,17 @@ export const listStudentQrHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ studentId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { data: rows, error } = await supabaseAdmin
       .from("student_qr_tokens")
       .select("id, token, issued_at, issued_by, revoked_at, revoked_by, reason")
       .eq("student_id", data.studentId)
+      .eq("org_id", orgId)
       .order("issued_at", { ascending: false });
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
 
-/**
- * Returns students with their guardian contact + activity flags.
- * Used by bulk actions like "Email QR to parents" or sticker generation.
- */
 export const listStudentsForBulk = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -315,11 +328,13 @@ export const listStudentsForBulk = createServerFn({ method: "GET" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    let q = context.supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    let q = supabaseAdmin
       .from("students")
       .select(
         "id, full_name, external_id, qr_token, guardian_email, guardian_phone, qr_last_sent_at, class_id, classes(name)",
       )
+      .eq("org_id", orgId)
       .order("full_name");
     if (data.classId) q = q.eq("class_id", data.classId);
     if (data.studentIds?.length) q = q.in("id", data.studentIds);
@@ -328,13 +343,16 @@ export const listStudentsForBulk = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
-
 export const deleteStudent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ studentId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
-    const { error } = await supabase.from("students").delete().eq("id", data.studentId);
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { error } = await supabaseAdmin
+      .from("students")
+      .delete()
+      .eq("id", data.studentId)
+      .eq("org_id", orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -345,9 +363,11 @@ export const listAllStudents = createServerFn({ method: "GET" })
     z.object({ search: z.string().optional(), classId: z.string().uuid().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    let q = context.supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    let q = supabaseAdmin
       .from("students")
       .select("id, full_name, external_id, active, class_id, classes(name)")
+      .eq("org_id", orgId)
       .order("full_name")
       .limit(500);
     if (data.classId) q = q.eq("class_id", data.classId);

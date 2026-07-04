@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/landing/Logo";
+import { OrgSwitcher } from "@/components/app/OrgSwitcher";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useQueryClient } from "@tanstack/react-query";
@@ -81,9 +82,12 @@ export function AppShell({
   return (
     <div className="min-h-screen flex bg-[#fcfbf8]">
       <aside className="hidden md:flex w-60 flex-col border-r bg-white px-4 py-6">
-        <Link to="/" className="mb-8 px-2">
+        <Link to="/" className="mb-6 px-2">
           <Logo />
         </Link>
+        <div className="mb-6">
+          <OrgSwitcher />
+        </div>
         <Nav />
         <div className="mt-auto">
           <Button variant="ghost" size="sm" className="w-full justify-start" onClick={signOut}>
@@ -106,6 +110,9 @@ export function AppShell({
             <SheetContent side="left" className="w-72 p-5">
               <div className="mb-6">
                 <Logo />
+              </div>
+              <div className="mb-6">
+                <OrgSwitcher />
               </div>
               <Nav onNavigate={() => setMobileOpen(false)} />
               <div className="mt-6 pt-4 border-t">

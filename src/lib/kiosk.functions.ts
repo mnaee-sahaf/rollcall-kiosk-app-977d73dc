@@ -1,6 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolveActiveOrgId } from "@/lib/org-context";
+
+// Resolve the caller's active org or throw. Every authed handler scopes to this.
+async function activeOrg(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const orgId = await resolveActiveOrgId(supabaseAdmin, userId);
+  if (!orgId) throw new Error("No active organization");
+  return { supabaseAdmin, orgId };
+}
 
 const DURATION_MIN = { "30m": 30, "2h": 120, "8h": 480 } as const;
 
@@ -15,12 +24,17 @@ export const createKioskSession = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
     const minutes = DURATION_MIN[data.duration];
     const expires = new Date(Date.now() + minutes * 60_000).toISOString();
-    const { data: row, error } = await supabase
+    const { data: row, error } = await supabaseAdmin
       .from("kiosk_sessions")
-      .insert({ class_id: data.classId, created_by: userId, expires_at: expires })
+      .insert({
+        org_id: orgId,
+        class_id: data.classId,
+        created_by: context.userId,
+        expires_at: expires,
+      })
       .select()
       .single();
     if (error) throw new Error(error.message);
@@ -31,11 +45,12 @@ export const listKioskSessions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ classId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
-    const { data: rows, error } = await supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { data: rows, error } = await supabaseAdmin
       .from("kiosk_sessions")
       .select("*")
       .eq("class_id", data.classId)
+      .eq("org_id", orgId)
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw new Error(error.message);
@@ -46,11 +61,12 @@ export const revokeKioskSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
-    const { error } = await supabase
+    const { supabaseAdmin, orgId } = await activeOrg(context.userId);
+    const { error } = await supabaseAdmin
       .from("kiosk_sessions")
       .update({ revoked_at: new Date().toISOString() })
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .eq("org_id", orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -62,7 +78,7 @@ export const getKioskBoard = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: session } = await supabaseAdmin
       .from("kiosk_sessions")
-      .select("id, class_id, expires_at, revoked_at")
+      .select("id, class_id, org_id, expires_at, revoked_at")
       .eq("token", data.token)
       .maybeSingle();
     if (!session) return { error: "not_found" as const };
@@ -83,9 +99,9 @@ export const getKioskBoard = createServerFn({ method: "GET" })
         .eq("class_id", session.class_id)
         .eq("day", today),
       supabaseAdmin
-        .from("school_settings")
-        .select("school_name, logo_url")
-        .eq("singleton", true)
+        .from("organizations")
+        .select("name, logo_url")
+        .eq("id", session.org_id)
         .maybeSingle(),
     ]);
 
@@ -94,7 +110,7 @@ export const getKioskBoard = createServerFn({ method: "GET" })
       cls,
       students: students ?? [],
       todayEvents: events ?? [],
-      settings: settings ?? null,
+      settings: settings ? { school_name: settings.name, logo_url: settings.logo_url } : null,
     };
   });
 
@@ -107,7 +123,7 @@ export const recordKioskScan = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: session } = await supabaseAdmin
       .from("kiosk_sessions")
-      .select("id, class_id, expires_at, revoked_at")
+      .select("id, class_id, org_id, expires_at, revoked_at")
       .eq("token", data.sessionToken)
       .maybeSingle();
     if (!session) return { ok: false as const, error: "Invalid kiosk session" };
@@ -161,6 +177,7 @@ export const recordKioskScan = createServerFn({ method: "POST" })
     }
 
     const { error: insErr } = await supabaseAdmin.from("attendance_events").insert({
+      org_id: session.org_id,
       student_id: student.id,
       class_id: session.class_id,
       kiosk_session_id: session.id,

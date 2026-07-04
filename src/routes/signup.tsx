@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { createOrganization, getJoinContext } from "@/lib/organization.functions";
+import { createOrganization } from "@/lib/organization.functions";
 import { Logo } from "@/components/landing/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,14 +24,14 @@ import {
   ClipboardList,
   QrCode,
   Check,
-  LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getCountryFlag } from "@/lib/countryFlags";
 
-export const Route = createFileRoute("/welcome/create")({
+export const Route = createFileRoute("/signup")({
   ssr: false,
-  component: CreateOrgWizard,
+  component: SignupWizard,
 });
 
 const INDUSTRIES = [
@@ -92,16 +92,24 @@ const REFERRAL_SOURCES = [
   "Other",
 ];
 
-function CreateOrgWizard() {
+type Phase = "loading" | "wizard";
+
+function SignupWizard() {
   const navigate = useNavigate();
-  const fetchCtx = useServerFn(getJoinContext);
   const createOrg = useServerFn(createOrganization);
-  const [authEmail, setAuthEmail] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+
+  const [phase, setPhase] = useState<Phase>("loading");
+  // When resuming (account already created, org not yet), skip the account step.
+  const [resuming, setResuming] = useState(false);
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
-  // Form state
+  // Account
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+
+  // Org profile
   const [schoolName, setSchoolName] = useState("");
   const [country, setCountry] = useState("");
   const [phone, setPhone] = useState("");
@@ -112,55 +120,50 @@ function CreateOrgWizard() {
   const [referralSource, setReferralSource] = useState("");
 
   useEffect(() => {
+    // Signup is always open (multi-tenant). If already signed in, this is
+    // someone creating an ADDITIONAL org — skip the account step.
     supabase.auth
       .getUser()
       .then(({ data }) => {
-        if (!data.user) {
-          navigate({ to: "/auth", search: { mode: "signin", invite: undefined }, replace: true });
-          return;
+        if (data.user) {
+          setResuming(true);
+          setEmail(data.user.email ?? "");
+          setStep(2);
         }
-        setAuthEmail(data.user.email ?? null);
-        return fetchCtx({}).then((c) => {
-          if (c.hasRole) {
-            navigate({ to: "/app", replace: true });
-            return;
-          }
-          if (c.orgExists) {
-            toast.error("An organization already exists. Ask your admin for an invite.");
-            navigate({ to: "/welcome" });
-            return;
-          }
-          setReady(true);
-        });
+        setPhase("wizard");
       })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : "Could not load your account");
-        navigate({ to: "/auth", search: { mode: "signin", invite: undefined }, replace: true });
-      });
-  }, [fetchCtx, navigate]);
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    navigate({ to: "/auth", search: { mode: "signin", invite: undefined }, replace: true });
-  }
+      .catch(() => setPhase("wizard"));
+  }, []);
 
   function toggleDevice(id: string) {
     setDevices((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
   }
 
-  const step1Valid =
+  const accountValid =
+    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) &&
+    password.length >= 8 &&
+    fullName.trim().length > 0;
+  const orgValid =
     schoolName.trim().length >= 2 &&
     country.trim().length > 0 &&
     phone.trim().length > 0 &&
     industry.trim().length > 0 &&
     orgSize.trim().length > 0 &&
     role.trim().length > 0;
-  const step2Valid = devices.length > 0;
-  const step3Valid = referralSource.length > 0;
+  const devicesValid = devices.length > 0;
+  const referralValid = referralSource.length > 0;
 
   async function handleSubmit() {
     setSubmitting(true);
     try {
+      if (!resuming) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: fullName.trim() } },
+        });
+        if (error) throw error;
+      }
       await createOrg({
         data: {
           schoolName: schoolName.trim(),
@@ -181,13 +184,15 @@ function CreateOrgWizard() {
     }
   }
 
-  if (!ready) {
+  if (phase === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fcfbf8] text-sm text-muted-foreground">
         Loading…
       </div>
     );
   }
+
+  const totalSteps = 4;
 
   return (
     <div className="min-h-screen bg-[#fcfbf8]">
@@ -196,19 +201,15 @@ function CreateOrgWizard() {
           <Link to="/">
             <Logo />
           </Link>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-muted-foreground hidden sm:inline">{authEmail}</span>
-            <Button variant="ghost" size="sm" onClick={handleSignOut}>
-              <LogOut className="h-4 w-4 mr-1.5" /> Sign out
-            </Button>
-          </div>
+          <Link to="/auth" className="text-sm text-muted-foreground hover:text-foreground">
+            Already have an account? Sign in
+          </Link>
         </div>
       </header>
 
       <div className="mx-auto max-w-2xl px-6 py-10 md:py-14">
-        {/* Step indicator */}
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-6">
-          {[1, 2, 3].map((n) => (
+          {[1, 2, 3, 4].map((n) => (
             <div key={n} className="flex items-center gap-2">
               <div
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] ${
@@ -221,22 +222,73 @@ function CreateOrgWizard() {
               >
                 {step > n ? <Check className="h-3 w-3" /> : n}
               </div>
-              {n < 3 && <div className="h-px w-8 bg-border" />}
+              {n < totalSteps && <div className="h-px w-8 bg-border" />}
             </div>
           ))}
-          <span className="ml-2">Step {step} of 3</span>
+          <span className="ml-2">Step {step} of {totalSteps}</span>
         </div>
 
         {step === 1 && (
           <div className="rounded-2xl border bg-white p-8 shadow-sm">
             <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              <ShieldCheck className="h-3.5 w-3.5" /> You'll be the administrator
+            </div>
+            <h1 className="mt-3 text-2xl font-bold">Create your school's Jibble RollCall</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This creates a new organization. The account you make here is the admin account —
+              you'll add teacher logins afterward.
+            </p>
+
+            <div className="mt-6 space-y-4">
+              <div>
+                <Label htmlFor="fullName">Your full name *</Label>
+                <Input
+                  id="fullName"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Jordan Rivera"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Work email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@school.edu"
+                />
+              </div>
+              <div>
+                <Label htmlFor="password">Password *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  minLength={8}
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <Button size="lg" disabled={!accountValid} onClick={() => setStep(2)}>
+                Continue <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="rounded-2xl border bg-white p-8 shadow-sm">
+            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
               <Building2 className="h-3.5 w-3.5" /> Organization details
             </div>
-            <h1 className="mt-3 text-2xl font-bold">
-              Let's start your team on the right track
-            </h1>
+            <h1 className="mt-3 text-2xl font-bold">Tell us about your school</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Help us tailor RollCall to your school.
+              Help us tailor Jibble RollCall to your organization.
             </p>
 
             <div className="mt-6 space-y-4">
@@ -256,15 +308,12 @@ function CreateOrgWizard() {
                   <Select value={country} onValueChange={setCountry}>
                     <SelectTrigger id="country"><SelectValue placeholder="Select a country" /></SelectTrigger>
                     <SelectContent>
-                      {COUNTRIES.map((c) => {
-                        const flag = getCountryFlag(c);
-                        return (
-                          <SelectItem key={c} value={c}>
-                            <span className="mr-2">{flag}</span>
-                            {c}
-                          </SelectItem>
-                        );
-                      })}
+                      {COUNTRIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          <span className="mr-2">{getCountryFlag(c)}</span>
+                          {c}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -304,17 +353,24 @@ function CreateOrgWizard() {
               </div>
             </div>
 
-            <div className="mt-8 flex justify-end">
-              <Button size="lg" disabled={!step1Valid} onClick={() => setStep(2)}>
+            <div className="mt-8 flex justify-between">
+              {resuming ? (
+                <span />
+              ) : (
+                <Button variant="ghost" onClick={() => setStep(1)}>
+                  <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                </Button>
+              )}
+              <Button size="lg" disabled={!orgValid} onClick={() => setStep(3)}>
                 Continue <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div className="rounded-2xl border bg-white p-8 shadow-sm">
-            <h1 className="text-2xl font-bold">What will your team use to mark attendance?</h1>
+            <h1 className="text-2xl font-bold">How will your team mark attendance?</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Pick one or more. You can change this anytime in settings.
             </p>
@@ -346,17 +402,17 @@ function CreateOrgWizard() {
             </div>
 
             <div className="mt-8 flex justify-between">
-              <Button variant="ghost" onClick={() => setStep(1)}>
+              <Button variant="ghost" onClick={() => setStep(2)}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Button>
-              <Button size="lg" disabled={!step2Valid} onClick={() => setStep(3)}>
+              <Button size="lg" disabled={!devicesValid} onClick={() => setStep(4)}>
                 Continue <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div className="rounded-2xl border bg-white p-8 shadow-sm">
             <h1 className="text-2xl font-bold">Where did you first hear about us?</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -389,10 +445,10 @@ function CreateOrgWizard() {
             </div>
 
             <div className="mt-8 flex justify-between">
-              <Button variant="ghost" onClick={() => setStep(2)}>
+              <Button variant="ghost" onClick={() => setStep(3)}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Button>
-              <Button size="lg" disabled={!step3Valid || submitting} onClick={handleSubmit}>
+              <Button size="lg" disabled={!referralValid || submitting} onClick={handleSubmit}>
                 {submitting ? "Creating…" : "Create organization"}
               </Button>
             </div>

@@ -34,7 +34,7 @@ function SettingsPage() {
     });
     fGet({}).then((s) => {
       if (s) {
-        setName(s.school_name ?? "");
+        setName(s.name ?? "");
         setLogoUrl(s.logo_url ?? null);
         setCutoff((s.day_cutoff_time ?? "09:00").slice(0, 5));
         setAbsentAfter((s.absent_after_time ?? "10:30").slice(0, 5));
@@ -49,7 +49,7 @@ function SettingsPage() {
     try {
       await fUpdate({
         data: {
-          school_name: name || null,
+          name: name || undefined,
           logo_url: logoUrl,
           day_cutoff_time: cutoff,
           absent_after_time: absentAfter,

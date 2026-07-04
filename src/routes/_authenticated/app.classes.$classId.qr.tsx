@@ -26,7 +26,7 @@ function QrSheetPage() {
   useEffect(() => {
     fSettings({}).then((s) => {
       setLogoUrl(s?.logo_url ?? null);
-      setSchoolName(s?.school_name ?? null);
+      setSchoolName(s?.name ?? null);
     });
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     fGetClass({ data: { classId } }).then(async ({ cls, students }) => {
