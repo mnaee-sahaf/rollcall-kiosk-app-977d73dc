@@ -11,40 +11,6 @@ async function assertAdmin(supabase: any, userId: string) {
   if (!data || data.length === 0) throw new Error("Forbidden: admin only");
 }
 
-export const importTeachers = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z
-      .object({
-        rows: z
-          .array(z.object({ email: z.string().email(), full_name: z.string().optional() }))
-          .max(500),
-      })
-      .parse(d),
-  )
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const results: Array<{ email: string; ok: boolean; error?: string; token?: string }> = [];
-    for (const row of data.rows) {
-      try {
-        const token =
-          crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-        const { error } = await context.supabase
-          .from("teacher_invites")
-          .insert({ email: row.email, token, invited_by: context.userId });
-        if (error) throw new Error(error.message);
-        results.push({ email: row.email, ok: true, token });
-      } catch (err) {
-        results.push({
-          email: row.email,
-          ok: false,
-          error: err instanceof Error ? err.message : "Failed",
-        });
-      }
-    }
-    return { results };
-  });
-
 export const importStudents = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>

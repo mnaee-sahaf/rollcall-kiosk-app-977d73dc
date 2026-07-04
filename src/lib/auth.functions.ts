@@ -40,6 +40,7 @@ export const getMyContext = createServerFn({ method: "GET" })
       isAdmin,
       isTeacher: roles.includes("teacher"),
       profile: profileRes.data,
+      mustChangePassword: !!profileRes.data?.must_change_password,
       setupProgress,
       needsOnboarding: isAdmin && !setupProgress.onboardedAt,
     };
@@ -61,30 +62,6 @@ export const completeOnboarding = createServerFn({ method: "POST" })
       .eq("singleton", true);
     if (error) throw new Error(error.message);
     return { ok: true };
-  });
-
-export const inviteTeacher = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ email: z.string().email() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: adminRows } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin");
-    if (!adminRows || adminRows.length === 0) {
-      throw new Error("Forbidden: admin only");
-    }
-
-    const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-    const { data: inv, error } = await supabase
-      .from("teacher_invites")
-      .insert({ email: data.email, token, invited_by: userId })
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    return { invite: inv };
   });
 
 export const listTeachers = createServerFn({ method: "GET" })
@@ -115,43 +92,15 @@ export const listTeachers = createServerFn({ method: "GET" })
     }));
   });
 
-export const listInvites = createServerFn({ method: "GET" })
+// Clears the forced-password-change flag after a teacher sets a new password.
+export const completePasswordChange = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase } = context;
-    const { data, error } = await supabase
-      .from("teacher_invites")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return data;
-  });
-
-export const acceptInvite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ token: z.string().min(10) }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { userId, claims } = context;
-    const email = (claims.email as string | undefined)?.toLowerCase();
-    if (!email) throw new Error("No email on session");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: inv } = await supabaseAdmin
-      .from("teacher_invites")
-      .select("*")
-      .eq("token", data.token)
-      .maybeSingle();
-    if (!inv) throw new Error("Invite not found");
-    if (inv.accepted_at) throw new Error("Invite already accepted");
-    if (new Date(inv.expires_at).getTime() < Date.now()) throw new Error("Invite expired");
-    if (inv.email.toLowerCase() !== email)
-      throw new Error(`Invite is for ${inv.email}, you're signed in as ${email}`);
-    await supabaseAdmin
-      .from("user_roles")
-      .insert({ user_id: userId, role: "teacher" })
-      .select();
-    await supabaseAdmin
-      .from("teacher_invites")
-      .update({ accepted_at: new Date().toISOString() })
-      .eq("id", inv.id);
-    return { ok: true };
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({ must_change_password: false })
+      .eq("id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
   });

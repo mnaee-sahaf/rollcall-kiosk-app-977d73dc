@@ -2,6 +2,18 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+// Public — no auth. Returns only whether an org (any admin) exists, so the
+// signup UI can decide whether to offer org creation or sign-in only.
+export const orgExists = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "admin")
+    .limit(1);
+  return { exists: (data ?? []).length > 0 };
+});
+
 const createOrgSchema = z.object({
   schoolName: z.string().min(2).max(120),
   country: z.string().max(80).optional().nullable(),
@@ -30,7 +42,8 @@ export const createOrganization = createServerFn({ method: "POST" })
       throw new Error("You already belong to an organization.");
     }
 
-    // If an admin already exists, this user joins as teacher only via invite — not here.
+    // Single-tenant: only one org/admin. If one already exists, teachers get
+    // accounts from that admin — they don't create an org here.
     const { data: anyAdmin, error: anyAdminErr } = await supabaseAdmin
       .from("user_roles")
       .select("user_id")
@@ -38,7 +51,7 @@ export const createOrganization = createServerFn({ method: "POST" })
       .limit(1);
     if (anyAdminErr) throw new Error(anyAdminErr.message);
     if (anyAdmin && anyAdmin.length > 0) {
-      throw new Error("An organization already exists. Ask your admin for an invite.");
+      throw new Error("An organization already exists. Ask your administrator for access.");
     }
 
     // Claim the admin role FIRST. The user_roles_single_admin partial unique
@@ -52,7 +65,7 @@ export const createOrganization = createServerFn({ method: "POST" })
       .insert({ user_id: userId, role: "admin" });
     if (roleErr) {
       if (roleErr.code === "23505") {
-        throw new Error("An organization already exists. Ask your admin for an invite.");
+        throw new Error("An organization already exists. Ask your administrator for access.");
       }
       throw new Error(roleErr.message);
     }
@@ -75,42 +88,4 @@ export const createOrganization = createServerFn({ method: "POST" })
     if (updateErr) throw new Error(updateErr.message);
 
     return { ok: true };
-  });
-
-export const getJoinContext = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { userId, claims } = context;
-    const email = ((claims.email as string | undefined) ?? "").toLowerCase();
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const [rolesRes, adminRes, invitesRes] = await Promise.all([
-      supabaseAdmin.from("user_roles").select("role").eq("user_id", userId),
-      supabaseAdmin.from("user_roles").select("user_id").eq("role", "admin").limit(1),
-      email
-        ? supabaseAdmin
-            .from("teacher_invites")
-            .select("id, email, token, expires_at, accepted_at, created_at")
-            .ilike("email", email)
-            .is("accepted_at", null)
-            .gt("expires_at", new Date().toISOString())
-        : Promise.resolve({
-            data: [] as Array<{
-              id: string;
-              email: string;
-              token: string;
-              expires_at: string;
-              accepted_at: string | null;
-              created_at: string;
-            }>,
-          }),
-    ]);
-
-    return {
-      email,
-      hasRole: (rolesRes.data ?? []).length > 0,
-      roles: (rolesRes.data ?? []).map((r) => r.role as string),
-      orgExists: (adminRes.data ?? []).length > 0,
-      invites: invitesRes.data ?? [],
-    };
   });
