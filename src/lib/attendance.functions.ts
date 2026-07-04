@@ -225,15 +225,35 @@ export const getReport = createServerFn({ method: "GET" })
       const { data: cs } = await supabase.from("classes").select("id").eq("teacher_id", data.teacherId);
       classIds = (cs ?? []).map((c) => c.id);
     }
-    let q = supabase
-      .from("attendance_events")
-      .select("id, student_id, class_id, status, day, method")
-      .gte("day", data.from)
-      .lte("day", data.to);
-    if (data.classId) q = q.eq("class_id", data.classId);
-    if (classIds) q = q.in("class_id", classIds.length ? classIds : ["00000000-0000-0000-0000-000000000000"]);
-    const { data: events, error } = await q;
-    if (error) throw new Error(error.message);
+    // Supabase caps a single select at 1000 rows by default, which silently
+    // truncates reports for any school with more than ~1000 events in range.
+    // Page through with .range() until a short page signals the end.
+    const PAGE = 1000;
+    type EventRow = {
+      id: string;
+      student_id: string;
+      class_id: string;
+      status: string;
+      day: string;
+      method: string;
+    };
+    const events: EventRow[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      let q = supabase
+        .from("attendance_events")
+        .select("id, student_id, class_id, status, day, method")
+        .gte("day", data.from)
+        .lte("day", data.to)
+        .order("day", { ascending: true })
+        .range(offset, offset + PAGE - 1);
+      if (data.classId) q = q.eq("class_id", data.classId);
+      if (classIds)
+        q = q.in("class_id", classIds.length ? classIds : ["00000000-0000-0000-0000-000000000000"]);
+      const { data: page, error } = await q;
+      if (error) throw new Error(error.message);
+      events.push(...((page ?? []) as EventRow[]));
+      if (!page || page.length < PAGE) break;
+    }
 
     const { data: classes } = await supabase.from("classes").select("id, name, teacher_id");
     const { data: students } = await supabase.from("students").select("id, full_name, class_id");
