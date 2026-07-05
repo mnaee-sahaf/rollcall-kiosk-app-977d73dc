@@ -2,77 +2,85 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Convert RollCall to a pnpm/Turbo monorepo (`apps/web`) with no behavior change, then establish the Phase 1 backend-modularization pattern (test harness + org-scoped repository layer + pure/IO separation) and prove it end-to-end by modularizing the **roster** domain (classes + students).
+**Goal:** Convert RollCall to an npm-workspaces + Turborepo monorepo (`apps/web`) with no behavior change, then establish the Phase 1 backend-modularization pattern (test harness + org-scoped repository layer + pure/IO separation) and prove it end-to-end by modularizing the **roster** domain (classes + students).
 
-**Architecture:** Move the existing TanStack Start app verbatim into `apps/web` under a pnpm workspace; add `packages/shared` and an `apps/api` stub for later phases. Then introduce Vitest and refactor backend logic into layered domain modules (`repository` = only place that touches the DB, always org-scoped; `service` = business rules; pure decision helpers split out for unit testing). The existing `*.functions.ts` handlers become thin wrappers over services — the running app is unchanged, only better-bounded.
+**Architecture:** Move the existing TanStack Start app verbatim into `apps/web` under an npm workspace; add `packages/shared` and an `apps/api` stub for later phases. Then introduce Vitest and refactor backend logic into layered domain modules (`repository` = only place that touches the DB, always org-scoped; `service` = business rules; pure decision helpers split out for unit testing). The existing `*.functions.ts` handlers become thin wrappers over services — the running app is unchanged, only better-bounded.
 
-**Tech Stack:** pnpm workspaces, Turborepo, TanStack Start (unchanged in this phase), Vite 8, React 19, Supabase JS, Vitest, TypeScript 5.8, Zod 3.
+**Tech Stack:** npm workspaces, Turborepo, TanStack Start (unchanged in this phase), Vite 8, React 19, Supabase JS, Vitest, TypeScript 5.8, Zod 3.
 
 ## Global Constraints
 
-- Node `v24.4.0`; package manager becomes **pnpm** (via Corepack). No npm lockfile after Phase 0.
+- Node `v24.4.0`; package manager is **npm with workspaces** (the repo's stray Bun artifacts are removed in Task 1).
 - Do NOT change the Supabase schema, RLS, or `src/integrations/supabase/types.ts` in this plan.
 - The app's user-facing behavior, routes, and URLs must be identical after Phase 0 (pure move).
-- `supabase/` (migrations) stays at the **repo root**, not inside `apps/web`.
+- `supabase/`, `docs/`, `AGENTS.md`, `DEPLOY.md`, and `.env.prod.backup` stay at the **repo root**, not inside `apps/web`.
 - Every repository query MUST be scoped by `org_id`; org-scoping lives only in repositories.
-- Preserve the existing `@/` path alias behavior inside `apps/web`.
+- Preserve the existing `@/` path alias (`@/* → ./src/*`) inside `apps/web`.
 - Frequent commits: one per task. `main` is branch-protected — all work lands via PRs.
 - Do NOT introduce the REST API, Hono, or the SPA in this plan (Phases 2–3).
+- npm workspace command forms used below: `npm install` (root, installs all), `npm run <script> -w web` (run a web script), `npm run test -w web -- <path>` (pass args to vitest).
 
 ---
 
 ## Phase 0 — Monorepo
 
-### Task 1: Enable pnpm + root workspace scaffolding
+### Task 1: Restructure into an npm-workspaces monorepo (move app → `apps/web`)
 
 **Files:**
-- Create: `pnpm-workspace.yaml`
-- Create: `turbo.json`
-- Create: `package.json` (root, replaces current after Task 2 move)
-- Modify: nothing else yet
+- Move (git mv): `src/`, `public/`, `index.html`, `vite.config.ts`, `tsconfig.json`, `eslint.config.js`, `components.json`, `.env`, `.env.example`, `package.json` → `apps/web/`
+- Delete: `bun.lock`, `bunfig.toml` (Bun no longer used)
+- Create: `turbo.json` (root), new root `package.json` (workspaces)
+- Modify: `apps/web/package.json` (name + scripts), `DEPLOY.md` (bun→npm)
 
 **Interfaces:**
-- Produces: workspace globs `apps/*`, `packages/*`; root scripts `dev`, `build`, `test`, `lint`, and the `db:*` scripts.
+- Produces: workspace package `web` that builds and runs exactly as before from `apps/web`; root scripts `dev`, `build`, `test`, `lint`, `typecheck`, and `db:*`.
 
-- [ ] **Step 1: Enable pnpm via Corepack**
+This task is intentionally atomic: the move and both `package.json` files must land together to leave a working tree.
+
+- [ ] **Step 1: Move the app source into `apps/web`**
 
 Run:
 ```bash
-corepack enable pnpm && corepack prepare pnpm@9 --activate && pnpm -v
+mkdir -p apps/web
+git mv src public index.html vite.config.ts tsconfig.json eslint.config.js components.json package.json apps/web/
+for f in .env .env.example; do [ -e "$f" ] && git mv "$f" apps/web/; done
+true
 ```
-Expected: prints a `9.x` version.
+Note: `supabase/`, `docs/`, `AGENTS.md`, `DEPLOY.md`, `.env.prod.backup`, `.gitignore`, `.prettierrc`, `.prettierignore`, `vercel.json` stay at the repo root.
 
-- [ ] **Step 2: Create `pnpm-workspace.yaml`**
+- [ ] **Step 2: Remove the stale Bun artifacts**
 
-```yaml
-packages:
-  - "apps/*"
-  - "packages/*"
+Run:
+```bash
+git rm bun.lock bunfig.toml
 ```
+Expected: both removed from the index (repo standardizes on npm).
 
-- [ ] **Step 3: Create `turbo.json`**
+- [ ] **Step 3: Edit `apps/web/package.json` — set name + add test/typecheck scripts**
 
+In `apps/web/package.json`: set `"name": "web"`, remove the `db:*` scripts (they move to the root manifest), and set the `scripts` block to:
 ```json
-{
-  "$schema": "https://turbo.build/schema.json",
-  "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": [".output/**", "dist/**"] },
-    "dev": { "cache": false, "persistent": true },
-    "test": { "dependsOn": ["^build"] },
-    "lint": {},
-    "typecheck": { "dependsOn": ["^build"] }
-  }
-}
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write ."
+  },
 ```
+Then add to `devDependencies`: `"vitest": "^2.1.0"`. Leave all other dependencies/devDependencies exactly as they are.
 
-- [ ] **Step 4: Create the root `package.json`**
+- [ ] **Step 4: Create the root `package.json` (workspaces + turbo + db scripts)**
 
 ```json
 {
   "name": "rollcall-monorepo",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.0.0",
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "turbo run dev --filter=web",
     "build": "turbo run build",
@@ -90,113 +98,57 @@ packages:
 }
 ```
 
-- [ ] **Step 5: Commit**
-
-```bash
-git add pnpm-workspace.yaml turbo.json package.json
-git commit -m "chore(monorepo): add pnpm workspace + turbo scaffolding"
-```
-
-Note: the repo still has the old single-package layout; Task 2 moves the app and reconciles the two `package.json` files. This commit is expected to leave the tree mid-migration — that is fine because Task 2 immediately follows.
-
----
-
-### Task 2: Move the app into `apps/web`
-
-**Files:**
-- Move (git mv): `src/`, `public/`, `index.html`, `vite.config.ts`, `tsconfig*.json`, `eslint.config.*`, `postcss`/tailwind config (if present), `components.json`, `.env`, `.env.example` → `apps/web/`
-- Create: `apps/web/package.json` (the old root package.json, renamed to `web`)
-- Modify: `apps/web/vite.config.ts` (no path changes needed; verify), `vercel.json`
-
-**Interfaces:**
-- Produces: workspace package `web` that builds and runs exactly as before from `apps/web`.
-
-- [ ] **Step 1: Create the app directory and move source**
-
-Run:
-```bash
-mkdir -p apps/web
-git mv src public index.html vite.config.ts apps/web/
-git mv tsconfig.json apps/web/ 2>/dev/null; true
-for f in tsconfig.app.json tsconfig.node.json eslint.config.js eslint.config.mjs components.json postcss.config.js postcss.config.cjs tailwind.config.ts tailwind.config.js .env .env.example; do
-  [ -e "$f" ] && git mv "$f" apps/web/;
-done
-true
-```
-Note: `supabase/`, `docs/`, `.env.prod.backup` stay at the repo root.
-
-- [ ] **Step 2: Turn the OLD root package.json into `apps/web/package.json`**
-
-The pre-migration `package.json` (the one listing `@tanstack/react-start` etc.) is now the web app's manifest. Recreate it at `apps/web/package.json` with these edits: set `"name": "web"`, drop the `db:*` scripts (they moved to root), keep all deps/devDeps, and add Vitest devDeps:
-
-```jsonc
-{
-  "name": "web",
-  "private": true,
-  "type": "module",
-  "sideEffects": false,
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
-    "preview": "vite preview",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "format": "prettier --write ."
-  }
-  // dependencies + devDependencies: copy verbatim from the previous root
-  // package.json, then add to devDependencies:
-  //   "vitest": "^2.1.0"
-}
-```
-
-- [ ] **Step 3: Point Vercel at the app**
-
-Replace `vercel.json` at the repo root with a monorepo-aware config:
+- [ ] **Step 5: Create `turbo.json`**
 
 ```json
 {
-  "framework": "tanstack-start",
-  "installCommand": "corepack enable pnpm && pnpm install --frozen-lockfile=false",
-  "buildCommand": "pnpm --filter web build",
-  "outputDirectory": "apps/web/.output"
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": { "dependsOn": ["^build"], "outputs": [".output/**", "dist/**"] },
+    "dev": { "cache": false, "persistent": true },
+    "test": { "dependsOn": ["^build"] },
+    "lint": {},
+    "typecheck": { "dependsOn": ["^build"] }
+  }
 }
 ```
-Manual checkpoint (owner): in the Vercel dashboard, leave Root Directory as the repo root (the commands above target `apps/web`); confirm the project still deploys on the next PR preview.
 
-- [ ] **Step 4: Install and verify dev + build**
+- [ ] **Step 6: Update `DEPLOY.md` package-manager references (bun → npm)**
+
+Replace every `bun install` → `npm install`, `bun run dev` → `npm run dev -w web`, `bun run db:link` → `npm run db:link`, `bun run db:push` → `npm run db:push`, `bun run db:types` → `npm run db:types`, `bun run db:diff <change_name>` → `npm run db:diff <change_name>`. Leave the rest of the file unchanged.
+
+- [ ] **Step 7: Install and verify the build**
 
 Run:
 ```bash
-rm -f package-lock.json && pnpm install
-pnpm --filter web build 2>&1 | tail -5
+npm install
+npm run build -w web 2>&1 | tail -5
 ```
-Expected: build completes; `apps/web/.output/` is generated. If path-alias errors appear, confirm `apps/web/tsconfig.json` still contains the `@/*` → `./src/*` mapping and `vite-tsconfig-paths` is a dep.
+Expected: install succeeds (writes root `package-lock.json`); build completes and generates `apps/web/.output/`. If a `@/`-alias error appears, confirm `apps/web/tsconfig.json` keeps the `@/*` → `./src/*` mapping and `vite-tsconfig-paths` is present.
 
-- [ ] **Step 5: Smoke the dev server**
+- [ ] **Step 8: Smoke the dev server**
 
 Run:
 ```bash
-pnpm --filter web dev &
-sleep 6 && curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/ ; kill %1
+npm run dev -w web >/tmp/web-dev.log 2>&1 &
+sleep 7 && curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/ ; kill %1
 ```
 Expected: `200`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add -A
-git commit -m "chore(monorepo): move app into apps/web; wire pnpm + vercel"
+git commit -m "chore(monorepo): move app to apps/web, npm workspaces + turbo, drop bun"
 ```
 
 ---
 
-### Task 3: Scaffold `packages/shared` and `apps/api` stub
+### Task 2: Scaffold `packages/shared` and `apps/api` stub
 
 **Files:**
 - Create: `packages/shared/package.json`, `packages/shared/tsconfig.json`, `packages/shared/src/index.ts`
-- Create: `apps/api/package.json`, `apps/api/tsconfig.json`, `apps/api/src/index.ts` (placeholder note only)
+- Create: `apps/api/package.json`, `apps/api/tsconfig.json`, `apps/api/src/index.ts`
 
 **Interfaces:**
 - Produces: importable workspace package `@rollcall/shared` (empty barrel for now); an `apps/api` slot reserved for Phase 2.
@@ -241,21 +193,26 @@ export {};
 
 `apps/api/package.json`:
 ```json
-{ "name": "api", "private": true, "type": "module", "scripts": { "build": "echo 'api: Phase 2' " } }
+{ "name": "api", "private": true, "type": "module", "scripts": { "build": "echo 'api: Phase 2'", "test": "echo 'api: Phase 2'", "lint": "echo 'api: Phase 2'", "typecheck": "echo 'api: Phase 2'" } }
+```
+`apps/api/tsconfig.json`:
+```json
+{ "compilerOptions": { "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler", "strict": true, "skipLibCheck": true }, "include": ["src"] }
 ```
 `apps/api/src/index.ts`:
 ```ts
 // Placeholder. The Hono + zod-openapi API is built in Phase 2.
 export {};
 ```
+Note: the `api` scripts are echo stubs so `turbo run build/test/lint/typecheck` succeeds across all workspaces in this phase.
 
-- [ ] **Step 5: Install + verify workspace resolves**
+- [ ] **Step 5: Install + verify the workspace graph resolves**
 
 Run:
 ```bash
-pnpm install && pnpm -r exec node -e "console.log('ok')"
+npm install && npm run build 2>&1 | tail -8
 ```
-Expected: prints `ok` for each package without resolution errors.
+Expected: install links `web`, `api`, `@rollcall/shared`; `turbo run build` succeeds (web builds; api prints its stub).
 
 - [ ] **Step 6: Commit**
 
@@ -263,6 +220,38 @@ Expected: prints `ok` for each package without resolution errors.
 git add -A
 git commit -m "chore(monorepo): scaffold packages/shared and apps/api stub"
 ```
+
+---
+
+### Task 3: Point Vercel at the monorepo
+
+**Files:**
+- Modify: `vercel.json`
+
+**Interfaces:**
+- Produces: a Vercel build that installs the workspace and builds `web`.
+
+- [ ] **Step 1: Rewrite `vercel.json`**
+
+```json
+{
+  "framework": "tanstack-start",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build -w web",
+  "outputDirectory": "apps/web/.output"
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add vercel.json
+git commit -m "chore(monorepo): vercel builds the web workspace"
+```
+
+- [ ] **Step 3: Manual checkpoint (owner)**
+
+After this branch's PR opens, confirm the Vercel **Preview** deploy for the PR builds green. Vercel Root Directory stays at the repo root (the commands above target `apps/web`). Do not merge to `main` until the preview is green. This is the one human gate in Phase 0.
 
 ---
 
@@ -275,7 +264,7 @@ git commit -m "chore(monorepo): scaffold packages/shared and apps/api stub"
 - Create: `apps/web/src/lib/__tests__/smoke.test.ts`
 
 **Interfaces:**
-- Produces: `pnpm --filter web test` runs Vitest; `@/` alias works in tests.
+- Produces: `npm run test -w web` runs Vitest; `@/` alias works in tests.
 
 - [ ] **Step 1: Write the failing smoke test**
 
@@ -290,10 +279,10 @@ describe("test harness", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails (no runner yet)**
+- [ ] **Step 2: Run it to verify it fails (no runner config yet)**
 
-Run: `pnpm --filter web test`
-Expected: FAIL — `vitest` not configured / command errors.
+Run: `npm run test -w web`
+Expected: FAIL — vitest cannot resolve config / `@/` alias, or no config found.
 
 - [ ] **Step 3: Add `apps/web/vitest.config.ts`**
 
@@ -309,7 +298,7 @@ export default defineConfig({
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `pnpm --filter web test`
+Run: `npm run test -w web`
 Expected: PASS — 1 test passed.
 
 - [ ] **Step 5: Commit**
@@ -324,7 +313,7 @@ git commit -m "test(web): add vitest harness"
 ### Task 5: Extract org-resolution into a testable core (pure/IO split)
 
 **Files:**
-- Create: `apps/web/src/server/core/org-context.ts` (pure decision helper + IO functions)
+- Create: `apps/web/src/server/core/org-context.ts`
 - Create: `apps/web/src/server/core/__tests__/org-context.test.ts`
 - Modify: `apps/web/src/lib/org-context.ts` (re-export from the new core; keep the public API stable)
 
@@ -361,7 +350,7 @@ describe("pickActiveOrgId", () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `pnpm --filter web test src/server/core`
+Run: `npm run test -w web -- src/server/core`
 Expected: FAIL — cannot find module `@/server/core/org-context`.
 
 - [ ] **Step 3: Implement the core**
@@ -439,7 +428,7 @@ export {
 
 - [ ] **Step 5: Run tests + typecheck**
 
-Run: `pnpm --filter web test src/server/core && pnpm --filter web typecheck`
+Run: `npm run test -w web -- src/server/core && npm run typecheck -w web`
 Expected: tests PASS; `tsc --noEmit` reports 0 errors.
 
 - [ ] **Step 6: Commit**
@@ -460,16 +449,16 @@ git commit -m "refactor(server): extract testable org-context core (pure pickAct
 **Interfaces:**
 - Produces:
   - `type Admin = SupabaseClient<Database>`
-  - `class OrgRepository { constructor(admin: Admin, orgId: string); protected scoped(table): filter-builder already `.eq("org_id", orgId)`; get orgId; get admin }`
-- Consumes: `resolveActiveMembership` (callers build repositories after resolving org).
+  - `class OrgRepository { constructor(admin: Admin, orgId: string); protected scoped(table); protected table(table); readonly orgId }`
+- Consumes: `Database` from `@/integrations/supabase/types`.
 
-Rationale: every domain repository extends `OrgRepository`, so the `org_id` filter is applied in exactly one place and cannot be forgotten.
+Rationale: every domain repository extends `OrgRepository`, so the `org_id` read filter is applied in exactly one place and cannot be forgotten.
 
 - [ ] **Step 1: Write the failing test**
 
 `apps/web/src/server/core/__tests__/repository.test.ts`:
 ```ts
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { OrgRepository } from "@/server/core/repository";
 
 // Minimal fake that records the org_id filter applied.
@@ -487,7 +476,7 @@ function fakeAdmin() {
 }
 
 class ThingRepo extends OrgRepository {
-  list() { return this.scoped("students").select("id"); }
+  list() { return (this as any).scoped("students").select("id"); }
 }
 
 describe("OrgRepository", () => {
@@ -505,7 +494,7 @@ describe("OrgRepository", () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `pnpm --filter web test src/server/core/__tests__/repository.test.ts`
+Run: `npm run test -w web -- src/server/core/__tests__/repository.test.ts`
 Expected: FAIL — cannot find module `@/server/core/repository`.
 
 - [ ] **Step 3: Implement the base**
@@ -519,7 +508,8 @@ export type Admin = SupabaseClient<Database>;
 type TableName = keyof Database["public"]["Tables"];
 
 // Base for all domain repositories. `scoped(table)` returns a query builder
-// with the org_id filter already applied — the ONLY place org scoping lives.
+// with the org_id read filter already applied — the ONLY place org scoping
+// lives. Writes use `table(name)` and stamp/filter org_id explicitly.
 export class OrgRepository {
   constructor(
     protected readonly admin: Admin,
@@ -535,11 +525,10 @@ export class OrgRepository {
   }
 }
 ```
-Note: repositories that need `insert`/`update`/`delete` use `this.table(name)` and stamp/filter `org_id` explicitly in their own methods (see roster repo). `scoped()` is the read shortcut whose filter cannot be forgotten.
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `pnpm --filter web test src/server/core/__tests__/repository.test.ts`
+Run: `npm run test -w web -- src/server/core/__tests__/repository.test.ts`
 Expected: PASS — 2 tests.
 
 - [ ] **Step 5: Commit**
@@ -551,20 +540,20 @@ git commit -m "feat(server): org-scoped repository base"
 
 ---
 
-### Task 7: Modularize the roster domain (classes + students)
+### Task 7: Modularize the roster domain (classes + students reads/create)
 
 **Files:**
 - Create: `apps/web/src/server/modules/roster/roster.repository.ts`
 - Create: `apps/web/src/server/modules/roster/roster.service.ts`
 - Create: `apps/web/src/server/modules/roster/__tests__/roster.service.test.ts`
-- Modify: `apps/web/src/lib/classes.functions.ts` (handlers call the service; no behavior change)
+- Modify: `apps/web/src/lib/classes.functions.ts` (the `listClasses`, `listClassesWithMeta`, `createClass` handlers call the service; no behavior change)
 
 **Interfaces:**
-- Consumes: `OrgRepository` (Task 6), `resolveActiveMembership`/`requireOrgRole` (Task 5), `assertWithinPlan` from `@/lib/plans`.
+- Consumes: `OrgRepository`/`Admin` (Task 6), `resolveActiveMembership` (Task 5), `assertWithinPlan` from `@/lib/plans`.
 - Produces:
-  - `class RosterRepository extends OrgRepository { listClasses(role, userId); listClassesWithMeta(role, userId); createClass({name, grade, teacherId}); classCount() }`
+  - `class RosterRepository extends OrgRepository { listClasses(teacherId); listClassesRaw(teacherId); teacherNames(ids); studentClassIds(); classCount(); insertClass(input) }`
   - `class RosterService { constructor(admin, orgId, role, userId); listClasses(); listClassesWithMeta(); createClass(input) }`
-  - Pure helper `scopeClassesToRole(role, userId, teacherIds): "all" | string` used to decide manager scoping.
+  - Pure helper `managerScope(role, userId): string | null`.
 
 - [ ] **Step 1: Write the failing test for role scoping**
 
@@ -586,7 +575,7 @@ describe("managerScope", () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `pnpm --filter web test src/server/modules/roster`
+Run: `npm run test -w web -- src/server/modules/roster`
 Expected: FAIL — cannot find module.
 
 - [ ] **Step 3: Implement the repository**
@@ -704,12 +693,12 @@ export class RosterService {
 
 - [ ] **Step 5: Run the service test to verify it passes**
 
-Run: `pnpm --filter web test src/server/modules/roster`
+Run: `npm run test -w web -- src/server/modules/roster`
 Expected: PASS — `managerScope` tests green.
 
 - [ ] **Step 6: Rewire the existing handlers to the service (no behavior change)**
 
-In `apps/web/src/lib/classes.functions.ts`, replace the `activeOrg()` helper and the `listClasses`/`listClassesWithMeta`/`createClass` handler bodies so they build a `RosterService`. Example for the three roster reads/writes:
+In `apps/web/src/lib/classes.functions.ts`, replace the local `activeOrg()` helper and the `listClasses` / `listClassesWithMeta` / `createClass` handler bodies so they build a `RosterService`. The three handlers become:
 ```ts
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -743,20 +732,20 @@ export const createClass = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => (await roster(context.userId)).createClass(data));
 ```
-Leave the remaining handlers in the file (`updateClass`, `deleteClass`, `addStudent`, `bulkAddStudents`, `getClass`, etc.) as-is for now; they migrate to `RosterService`/`RosterRepository` methods in the roster follow-on tasks. Do not change their behavior in this task.
+IMPORTANT: the file has other handlers (`updateClass`, `deleteClass`, `addStudent`, `bulkAddStudents`, `getClass`, and any others). Leave them exactly as they are — they still use the old `activeOrg()` pattern via `resolveActiveMembership`. If removing the local `activeOrg()` helper breaks those handlers, keep `activeOrg()` in the file for them; only the three handlers above must route through `RosterService`. Do not change any other handler's behavior.
 
-- [ ] **Step 7: Typecheck + build + roster tests**
+- [ ] **Step 7: Typecheck + full test run + build**
 
 Run:
 ```bash
-pnpm --filter web typecheck && pnpm --filter web test && pnpm --filter web build 2>&1 | tail -3
+npm run typecheck -w web && npm run test -w web && npm run build -w web 2>&1 | tail -3
 ```
 Expected: 0 tsc errors; all tests pass; build succeeds (regenerates `routeTree.gen.ts`).
 
 - [ ] **Step 8: Manual smoke — classes still work**
 
-Run the dev server, sign in as an owner, open `/app/classes`, create a class, confirm it appears and that a manager sees only their own classes. (Use the local Supabase owner account from the local-dev memory.)
-Expected: identical behavior to before the refactor.
+Start the dev server and, signed in as an owner against local Supabase, open `/app/classes`, create a class, and confirm it appears. Confirm a `manager`-role user sees only their own classes. (Use the local owner account from the local-dev-setup memory.)
+Expected: behavior identical to before the refactor.
 
 - [ ] **Step 9: Commit**
 
@@ -770,26 +759,23 @@ git commit -m "refactor(roster): repository+service layer behind classes server 
 ## Self-Review
 
 **1. Spec coverage.**
-- Modular monolith with layered modules → Tasks 5–7 establish the `core` + `modules/<name>/{repository,service}` structure. ✅ (roster proven; remaining 5 modules are follow-on plans, stated in Handoff.)
-- Org-scoping made structural (fixes leak risk) → `OrgRepository` (Task 6) + repos using it (Task 7). ✅
-- Monorepo (pnpm + Turbo, `apps/web`/`apps/api`/`packages/shared`) → Tasks 1–3. ✅
+- Modular monolith with layered modules → Tasks 5–7 establish `core` + `modules/<name>/{repository,service}`. ✅ (roster proven; other 5 domains are follow-on plans, per Handoff.)
+- Org-scoping made structural → `OrgRepository` (Task 6) + roster repo using it (Task 7). ✅
+- Monorepo (npm workspaces + Turbo; `apps/web`/`apps/api`/`packages/shared`) → Tasks 1–3. ✅
 - Testing (service unit tests; pure/IO split) → Tasks 4–7 add Vitest + tests. ✅ (Full tenant-isolation integration suite is Phase 2, per spec §7 — out of scope here.)
-- Prerender, REST API, SPA, Bearer auth → explicitly Phases 2–3; not in this plan. ✅
-- Schema/types/RLS untouched → constraint honored; no migration or `types.ts` edits. ✅
+- Prerender, REST API, SPA, Bearer auth → Phases 2–3; not in this plan. ✅
+- Schema/types/RLS untouched → no migration or `types.ts` edits. ✅
 
-**2. Placeholder scan.** No "TBD/TODO/handle edge cases". The `apps/api` stub is intentional and labelled as a Phase-2 slot, not a placeholder task. ✅
+**2. Placeholder scan.** No "TBD/TODO/handle edge cases". The `apps/api` echo stubs are intentional (keep turbo green), not placeholder tasks. ✅
 
-**3. Type consistency.** `Admin = SupabaseClient<Database>` defined in `repository.ts` and reused in `roster.service.ts`; `OrgRepository.orgId` public and used by `RosterService.createClass`; `managerScope` signature identical in test and impl; `resolveActiveMembership` signature unchanged from the original. ✅
+**3. Type consistency.** `Admin = SupabaseClient<Database>` defined in `repository.ts`, reused in `roster.service.ts`; `OrgRepository.orgId` public and read by `RosterService.createClass`; `managerScope` signature identical in test and impl; `resolveActiveMembership` signature unchanged from the original. ✅
 
-Known follow-on (not gaps in this plan): `classes.functions.ts` retains un-migrated handlers after Task 7; the roster follow-on plan finishes them. The five other domains (identity, attendance, kiosk, billing, reporting) each get their own plan reusing Tasks 5–7's pattern.
+Known follow-on (not gaps): `classes.functions.ts` keeps un-migrated handlers after Task 7; the roster follow-on plan finishes them. The other domains (identity, attendance, kiosk, billing, reporting) each get their own plan reusing Tasks 5–7's pattern.
 
 ---
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-07-05-replatform-phase0-1-foundation.md`. Two execution options:
-
-1. **Subagent-Driven (recommended)** — a fresh subagent per task, review between tasks, fast iteration.
-2. **Inline Execution** — execute tasks in this session with checkpoints for review.
+Plan complete and saved to `docs/superpowers/plans/2026-07-05-replatform-phase0-1-foundation.md`.
 
 After this plan lands, the remaining Phase 1 work is five short follow-on plans (one per domain), each reusing the repository+service+pure-helper pattern proven here: **identity**, **attendance**, **kiosk**, **billing**, **reporting** (plus finishing the rest of the roster handlers). Then Phase 2 (REST API) and Phase 3 (SPA) per the design spec.
