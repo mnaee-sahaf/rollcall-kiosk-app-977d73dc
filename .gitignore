@@ -42,3 +42,4 @@ supabase/.branches/
 *.njsproj
 *.sln
 *.sw?
+.superpowers/
