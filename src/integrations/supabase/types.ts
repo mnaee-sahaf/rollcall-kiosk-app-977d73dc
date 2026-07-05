@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -44,7 +24,6 @@ export type Database = {
           method: Database["public"]["Enums"]["attendance_method"]
           note: string | null
           occurred_at: string
-          org_id: string
           status: Database["public"]["Enums"]["attendance_status"]
           student_id: string
         }
@@ -57,7 +36,6 @@ export type Database = {
           method: Database["public"]["Enums"]["attendance_method"]
           note?: string | null
           occurred_at?: string
-          org_id: string
           status: Database["public"]["Enums"]["attendance_status"]
           student_id: string
         }
@@ -70,7 +48,6 @@ export type Database = {
           method?: Database["public"]["Enums"]["attendance_method"]
           note?: string | null
           occurred_at?: string
-          org_id?: string
           status?: Database["public"]["Enums"]["attendance_status"]
           student_id?: string
         }
@@ -90,13 +67,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "attendance_events_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "attendance_events_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
@@ -111,7 +81,6 @@ export type Database = {
           grade: string | null
           id: string
           name: string
-          org_id: string
           teacher_id: string
         }
         Insert: {
@@ -119,7 +88,6 @@ export type Database = {
           grade?: string | null
           id?: string
           name: string
-          org_id: string
           teacher_id: string
         }
         Update: {
@@ -127,18 +95,9 @@ export type Database = {
           grade?: string | null
           id?: string
           name?: string
-          org_id?: string
           teacher_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "classes_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       kiosk_sessions: {
         Row: {
@@ -147,7 +106,6 @@ export type Database = {
           created_by: string
           expires_at: string
           id: string
-          org_id: string
           revoked_at: string | null
           starts_at: string
           token: string
@@ -158,7 +116,6 @@ export type Database = {
           created_by: string
           expires_at: string
           id?: string
-          org_id: string
           revoked_at?: string | null
           starts_at?: string
           token?: string
@@ -169,7 +126,6 @@ export type Database = {
           created_by?: string
           expires_at?: string
           id?: string
-          org_id?: string
           revoked_at?: string | null
           starts_at?: string
           token?: string
@@ -182,114 +138,13 @@ export type Database = {
             referencedRelation: "classes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "kiosk_sessions_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
         ]
-      }
-      memberships: {
-        Row: {
-          created_at: string
-          id: string
-          org_id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          org_id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          org_id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "memberships_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organizations: {
-        Row: {
-          absent_after_time: string
-          country: string | null
-          created_at: string
-          created_by: string | null
-          day_cutoff_time: string
-          devices: string[]
-          id: string
-          industry: string | null
-          logo_url: string | null
-          name: string
-          onboarded_at: string | null
-          org_size: string | null
-          phone: string | null
-          plan: string
-          primary_role: string | null
-          referral_source: string | null
-          timezone: string
-        }
-        Insert: {
-          absent_after_time?: string
-          country?: string | null
-          created_at?: string
-          created_by?: string | null
-          day_cutoff_time?: string
-          devices?: string[]
-          id?: string
-          industry?: string | null
-          logo_url?: string | null
-          name: string
-          onboarded_at?: string | null
-          org_size?: string | null
-          phone?: string | null
-          plan?: string
-          primary_role?: string | null
-          referral_source?: string | null
-          timezone?: string
-        }
-        Update: {
-          absent_after_time?: string
-          country?: string | null
-          created_at?: string
-          created_by?: string | null
-          day_cutoff_time?: string
-          devices?: string[]
-          id?: string
-          industry?: string | null
-          logo_url?: string | null
-          name?: string
-          onboarded_at?: string | null
-          org_size?: string | null
-          phone?: string | null
-          plan?: string
-          primary_role?: string | null
-          referral_source?: string | null
-          timezone?: string
-        }
-        Relationships: []
       }
       profiles: {
         Row: {
           created_at: string
           full_name: string | null
           id: string
-          last_active_org_id: string | null
-          must_change_password: boolean
           school_name: string | null
           updated_at: string
         }
@@ -297,8 +152,6 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id: string
-          last_active_org_id?: string | null
-          must_change_password?: boolean
           school_name?: string | null
           updated_at?: string
         }
@@ -306,27 +159,76 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
-          last_active_org_id?: string | null
-          must_change_password?: boolean
           school_name?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_last_active_org_id_fkey"
-            columns: ["last_active_org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      school_settings: {
+        Row: {
+          absent_after_time: string
+          country: string | null
+          day_cutoff_time: string
+          devices: string[]
+          id: string
+          industry: string | null
+          logo_url: string | null
+          onboarded_at: string | null
+          org_size: string | null
+          phone: string | null
+          primary_role: string | null
+          referral_source: string | null
+          school_name: string | null
+          singleton: boolean
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          absent_after_time?: string
+          country?: string | null
+          day_cutoff_time?: string
+          devices?: string[]
+          id?: string
+          industry?: string | null
+          logo_url?: string | null
+          onboarded_at?: string | null
+          org_size?: string | null
+          phone?: string | null
+          primary_role?: string | null
+          referral_source?: string | null
+          school_name?: string | null
+          singleton?: boolean
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          absent_after_time?: string
+          country?: string | null
+          day_cutoff_time?: string
+          devices?: string[]
+          id?: string
+          industry?: string | null
+          logo_url?: string | null
+          onboarded_at?: string | null
+          org_size?: string | null
+          phone?: string | null
+          primary_role?: string | null
+          referral_source?: string | null
+          school_name?: string | null
+          singleton?: boolean
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       student_qr_tokens: {
         Row: {
           id: string
           issued_at: string
           issued_by: string | null
-          org_id: string
           reason: string | null
           revoked_at: string | null
           revoked_by: string | null
@@ -337,7 +239,6 @@ export type Database = {
           id?: string
           issued_at?: string
           issued_by?: string | null
-          org_id: string
           reason?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
@@ -348,7 +249,6 @@ export type Database = {
           id?: string
           issued_at?: string
           issued_by?: string | null
-          org_id?: string
           reason?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
@@ -356,13 +256,6 @@ export type Database = {
           token?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "student_qr_tokens_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "student_qr_tokens_student_id_fkey"
             columns: ["student_id"]
@@ -382,7 +275,6 @@ export type Database = {
           guardian_email: string | null
           guardian_phone: string | null
           id: string
-          org_id: string
           photo_url: string | null
           qr_last_sent_at: string | null
           qr_token: string
@@ -396,7 +288,6 @@ export type Database = {
           guardian_email?: string | null
           guardian_phone?: string | null
           id?: string
-          org_id: string
           photo_url?: string | null
           qr_last_sent_at?: string | null
           qr_token?: string
@@ -410,7 +301,6 @@ export type Database = {
           guardian_email?: string | null
           guardian_phone?: string | null
           id?: string
-          org_id?: string
           photo_url?: string | null
           qr_last_sent_at?: string | null
           qr_token?: string
@@ -423,14 +313,58 @@ export type Database = {
             referencedRelation: "classes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "students_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
         ]
+      }
+      teacher_invites: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          token?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
       }
       waitlist_signups: {
         Row: {
@@ -464,14 +398,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      has_org_role: {
-        Args: { org: string; roles: Database["public"]["Enums"]["app_role"][] }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
         Returns: boolean
       }
-      is_org_member: { Args: { org: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "owner" | "admin" | "manager" | "member"
+      app_role: "admin" | "teacher"
       attendance_method: "kiosk" | "manual"
       attendance_status: "present" | "absent" | "late"
     }
@@ -599,15 +535,11 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
-      app_role: ["owner", "admin", "manager", "member"],
+      app_role: ["admin", "teacher"],
       attendance_method: ["kiosk", "manual"],
       attendance_status: ["present", "absent", "late"],
     },
   },
 } as const
-
