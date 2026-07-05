@@ -1,0 +1,1 @@
+{ "name": "api", "private": true, "type": "module", "scripts": { "build": "echo 'api: Phase 2'", "test": "echo 'api: Phase 2'", "lint": "echo 'api: Phase 2'", "typecheck": "echo 'api: Phase 2'" } }
