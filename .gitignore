@@ -43,3 +43,4 @@ supabase/.branches/
 *.sln
 *.sw?
 .superpowers/
+.turbo/
