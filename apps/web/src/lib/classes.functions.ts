@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveActiveMembership } from "@/lib/org-context";
 import { assertWithinPlan } from "@/lib/plans";
+import { RosterService } from "@/server/modules/roster/roster.service";
 
 // Resolve the caller's active org + role or throw. Every handler scopes to this.
 async function activeOrg(userId: string) {
@@ -12,50 +13,20 @@ async function activeOrg(userId: string) {
   return { supabaseAdmin, orgId: m.orgId, role: m.role };
 }
 
+async function roster(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const m = await resolveActiveMembership(supabaseAdmin, userId);
+  if (!m) throw new Error("No active organization");
+  return new RosterService(supabaseAdmin, m.orgId, m.role, userId);
+}
+
 export const listClasses = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
-    let q = supabaseAdmin
-      .from("classes")
-      .select("id, name, grade, teacher_id, created_at")
-      .eq("org_id", orgId)
-      .order("created_at", { ascending: false });
-    if (role === "manager") q = q.eq("teacher_id", context.userId);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
-    return data;
-  });
+  .handler(async ({ context }) => (await roster(context.userId)).listClasses());
 
 export const listClassesWithMeta = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
-    let cq = supabaseAdmin
-      .from("classes")
-      .select("id, name, grade, teacher_id, created_at")
-      .eq("org_id", orgId)
-      .order("name");
-    if (role === "manager") cq = cq.eq("teacher_id", context.userId);
-    const { data: classes } = await cq;
-    const ids = (classes ?? []).map((c) => c.teacher_id).filter((x): x is string => !!x);
-    const { data: profs } = await supabaseAdmin
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
-    const profMap = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
-    const { data: counts } = await supabaseAdmin
-      .from("students")
-      .select("class_id")
-      .eq("org_id", orgId);
-    const countMap = new Map<string, number>();
-    for (const s of counts ?? []) countMap.set(s.class_id, (countMap.get(s.class_id) ?? 0) + 1);
-    return (classes ?? []).map((c) => ({
-      ...c,
-      teacher_name: c.teacher_id ? (profMap.get(c.teacher_id) ?? null) : null,
-      student_count: countMap.get(c.id) ?? 0,
-    }));
-  });
+  .handler(async ({ context }) => (await roster(context.userId)).listClassesWithMeta());
 
 export const createClass = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -68,23 +39,7 @@ export const createClass = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) => {
-    const { supabaseAdmin, orgId, role } = await activeOrg(context.userId);
-    if (role === "manager") throw new Error("Only owners and admins can manage classes");
-    await assertWithinPlan(supabaseAdmin, orgId, "classes");
-    const { data: row, error } = await supabaseAdmin
-      .from("classes")
-      .insert({
-        org_id: orgId,
-        name: data.name,
-        grade: data.grade ?? null,
-        teacher_id: data.teacherId ?? context.userId,
-      })
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    return row;
-  });
+  .handler(async ({ data, context }) => (await roster(context.userId)).createClass(data));
 
 export const updateClass = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
