@@ -37,7 +37,11 @@ export class RosterService {
   }
 
   async createClass(input: { name: string; grade?: string; teacherId?: string }) {
-    if (this.role !== "owner" && this.role !== "admin") throw new Error("Forbidden");
+    // Behavior-preserving: match the original blocklist + message exactly, and
+    // stay consistent with the sibling class handlers (updateClass/deleteClass).
+    // Hardening to an owner/admin allowlist across ALL class handlers is a
+    // deliberate follow-on, not this refactor.
+    if (this.role === "manager") throw new Error("Only owners and admins can manage classes");
     await assertWithinPlan(this.admin, this.repo.orgId, "classes");
     return this.repo.insertClass({
       name: input.name,
