@@ -1,9 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
-// Resolves the caller's active org: their last_active_org_id if they're still a
-// member of it, otherwise any org they belong to, otherwise null (no orgs yet).
-// Membership is always re-checked here — a stale pointer never grants access.
+// Pure decision: given the user's preferred org and the orgs they belong to,
+// pick the active org. A stale preference never grants access.
+export function pickActiveOrgId(
+  pref: string | null,
+  memberOrgIds: string[],
+): string | null {
+  if (pref && memberOrgIds.includes(pref)) return pref;
+  return memberOrgIds[0] ?? null;
+}
+
 export async function resolveActiveOrgId(
   admin: SupabaseClient<Database>,
   userId: string,
@@ -12,13 +19,12 @@ export async function resolveActiveOrgId(
     admin.from("profiles").select("last_active_org_id").eq("id", userId).maybeSingle(),
     admin.from("memberships").select("org_id").eq("user_id", userId),
   ]);
-  const memberOrgs = new Set((mems ?? []).map((m) => m.org_id));
-  const pref = prof?.last_active_org_id ?? null;
-  if (pref && memberOrgs.has(pref)) return pref;
-  return (mems ?? [])[0]?.org_id ?? null;
+  return pickActiveOrgId(
+    prof?.last_active_org_id ?? null,
+    (mems ?? []).map((m) => m.org_id),
+  );
 }
 
-// Resolve the caller's active org AND their role in it.
 export async function resolveActiveMembership(
   admin: SupabaseClient<Database>,
   userId: string,
@@ -35,7 +41,6 @@ export async function resolveActiveMembership(
   return { orgId, role: data.role };
 }
 
-// Throw unless the caller has one of `roles` in their active org.
 export async function requireOrgRole(
   admin: SupabaseClient<Database>,
   userId: string,
